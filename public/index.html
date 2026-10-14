@@ -120,39 +120,46 @@ var TURN_V=11*MPH;
 var reduceMotion=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // Crossing controls: signals at Cornelia, Roscoe and Belmont. Stop signs on Broadway at Aldine and Melrose.
+// The game is one walk south from Cornelia to Belmont. Each stage is the stretch up to and through one crossing.
+var W=START_X,E=CLEAR_X+2;
 var LEVELS=[
-  {name:'Cornelia',  cw:1843, ctrl:'signal',off:0,  sb:1605, nb:1865},
-  {name:'Stratford', cw:2885, ctrl:'none'},
-  {name:'Roscoe',    cw:5325, ctrl:'signal',off:13, sb:5104, nb:5347},
-  {name:'Buckingham',cw:5890, ctrl:'none'},
-  {name:'Across Buckingham',data:'Buckingham',cw:6083,ctrl:'none',tune:{turnP:.6,yieldP:.4}},
-  {name:'Aldine',    cw:7634, ctrl:'stop', sb:7363, nb:7656},
-  {name:'Melrose',   cw:8799, ctrl:'stop', sb:8545, nb:8821},
-  {name:'Belmont',   cw:10538,ctrl:'signal',off:25,sb:10248,nb:10560}
+  {name:'Cornelia',  cw:1843, ctrl:'signal',off:0,  sb:1605, nb:1865, pts:[[E,1843]]},
+  {name:'Across Stratford',data:'Stratford',cw:2756,ctrl:'none', pts:[[E,2690],[E,2830]]},
+  {name:'Stratford', cw:2885, ctrl:'none', pts:[[E,2885],[W,2885],[W,3170],[W,3425]]},
+  {name:'Across Roscoe',data:'Roscoe',cw:4608,ctrl:'none', pts:[[W,4535],[W,4720]]},
+  {name:'Roscoe',    cw:5325, ctrl:'signal',off:13, sb:5104, nb:5347, cws:[5126,5325], pts:[[W,5126],[E,5126],[E,5275]]},
+  {name:'Buckingham',cw:5890, ctrl:'none', pts:[[E,5890],[W,5890]]},
+  {name:'Across Buckingham',data:'Buckingham',cw:6083,ctrl:'none', pts:[[W,5960],[W,6230]]},
+  {name:'Aldine',    cw:7634, ctrl:'stop', sb:7363, nb:7656, pts:[[W,7385],[E,7385],[E,7634],[W,7634]]},
+  {name:'Melrose',   cw:8799, ctrl:'stop', sb:8545, nb:8821, pts:[[W,8567],[E,8567],[E,8799],[W,8799]]},
+  {name:'Blind Alley',cw:9550,ctrl:'none', pts:[[W,9470],[W,9640]]},
+  {name:'Belmont',   cw:10538,ctrl:'signal',off:25,sb:10248,nb:10560, cws:[10270,10538], pts:[[W,10270],[E,10270],[E,10538],[W,10538],[W,10760]]}
 ];
-// Each crossing is a route of waypoints. Stratford: walk south past a blind garage exit.
-// Roscoe: a horseshoe, across at the north crosswalk, south across Roscoe, back at the south crosswalk.
-// Across Buckingham: walk south over the mouth of Buckingham while drivers turn into it.
-var DRIVE_Y=3256;
+// Blind alleys on the west sidewalk. Drivers come out of them without stopping. A neighbor got a mirror put up at the Optima one.
+var DRIVES=[{y:3256,mirror:true,t:2},{y:9550,t:2}],DRIVE_Y=DRIVES[0].y;
+function nearDrive(y,pad){return DRIVES.some(function(d){return Math.abs(y-d.y)<pad})}
+var ROUTE=[[W,1843]];
+LEVELS.forEach(function(L){L.w0=ROUTE.length-1;ROUTE=ROUTE.concat(L.pts);L.w1=ROUTE.length-1;if(!L.cws)L.cws=[L.cw]});
+function cumOf(r){var c=[0];for(var i=1;i<r.length;i++)c.push(c[i-1]+Math.hypot(r[i][0]-r[i-1][0],r[i][1]-r[i-1][1]));return c}
+var ROUTE_C=cumOf(ROUTE);
+// every crosswalk the walk uses across Broadway
+var ROUTE_CWS=[];for(var ri=1;ri<ROUTE.length;ri++)if(ROUTE[ri][0]!==ROUTE[ri-1][0])ROUTE_CWS.push(ROUTE[ri][1]);
 function levelNamed(n){return LEVELS.filter(function(L){return L.name===n})[0]}
-LEVELS.forEach(function(L){L.route=[[START_X,L.cw],[CLEAR_X+2,L.cw]];L.cws=[L.cw]});
-levelNamed('Stratford').route=[[START_X,2885],[START_X,3425]];levelNamed('Stratford').walk=true;
-levelNamed('Roscoe').route=[[START_X,5126],[398,5126],[398,5325],[START_X+2,5325]];levelNamed('Roscoe').cws=[5126,5325];
-levelNamed('Across Buckingham').route=[[START_X,5960],[START_X,6230]];levelNamed('Across Buckingham').cws=[];
-levelNamed('Aldine').route=[[START_X,7385],[398,7385],[398,7634],[START_X+2,7634]];levelNamed('Aldine').cws=[7385,7634];
-levelNamed('Melrose').route=[[START_X,8567],[398,8567],[398,8799],[START_X+2,8799]];levelNamed('Melrose').cws=[8567,8799];
-levelNamed('Belmont').route=[[START_X,10270],[398,10270],[398,10538],[START_X+2,10538],[START_X+2,10760]];levelNamed('Belmont').cws=[10270,10538];
 // crash records, counts and quips are kept per street
 function dataKey(L){return L.data||L.name}
-var SHORT={Stratford:'Walk south past the alley','Across Buckingham':'Walk south across Buckingham. Drivers turn in from both directions',Roscoe:'Cross, walk south, cross back',Aldine:'School rush. Cross, walk south, cross back',Melrose:'Cross, walk south, cross back',Belmont:'Cross, walk south, cross back'};
-var INSTR={Stratford:'Walk south past the alley. Check the round mirror on the corner before you step out.',
-  Aldine:'School rush. Cross north of Aldine, walk south, then cross back where the crossing guard is.',
-  Melrose:'Cross north of Melrose, walk south across Melrose, then cross back.',
-  Belmont:'Cross north of Belmont, walk south across Belmont, cross back, then head south.',Roscoe:'Cross at the north crosswalk, walk south across Roscoe, then cross back.'};
+var SHORT={Cornelia:'Cross Broadway with the walk signal','Across Stratford':'Walk south across Stratford. Drivers pull out onto Broadway',
+  Stratford:'Cross Broadway, then walk south past the alley. Check the mirror','Across Roscoe':'Walk south across Roscoe. Drivers turn in off Broadway',
+  Roscoe:'Cross with the signal, then walk south across Roscoe',Buckingham:'Walk south, then cross back at Buckingham',
+  'Across Buckingham':'Walk south across Buckingham. Drivers turn in from both directions',Aldine:'School rush. Cross, walk south, cross back',
+  Melrose:'Cross, walk south, cross back','Blind Alley':'Walk south past the alley. Drivers come out blind',Belmont:'Cross, walk south, cross back, then on to the end'};
 var wp=1;
 var MOUTHS=GEO.mouths;
 MOUTHS.forEach(function(m){
   var two=m.d==='two';
+  // side streets you walk across: busier than the rest
+  if(m.n==='Buckingham'&&m.s==='W'){m.turnP=.6;m.yieldP=.4}
+  if(m.n==='Roscoe'&&m.s==='W')m.turnP=.35;
+  if(m.n==='Stratford')m.busy=.4;
   m.curb=m.p[m.p.length-1];
   // two-way Belmont: traffic toward Broadway on one half, away on the other
   m.inOff=two?(m.s==='W'?25:-25):0;
@@ -170,7 +177,8 @@ var RECORDS={
   Buckingham:[['Aug 28, 2020, 12:40 PM','A driver turning left hit a pedestrian crossing at the intersection.'],['Nov 1, 2025, 7:01 PM','A driver who failed to yield hit a cyclist.']],
   Aldine:[['Nov 14, 2025, 8:18 AM','A southbound driver hit a pedestrian in the crosswalk.'],['Aug 19, 2023, 12:14 PM','A driver who failed to yield hit a pedestrian in the crosswalk.'],['May 10, 2025, 10:18 AM','A southbound driver hit a pedestrian in the crosswalk, then drove off.']],
   Melrose:[['Jun 21, 2023, 11:05 AM','A truck backing up hit a pedestrian.'],['Apr 28, 2026, 11:30 AM','A driver pulling over to park hit a cyclist.']],
-  Belmont:[['Jan 8, 2023, 1:15 AM','A driver hit a pedestrian in the crosswalk, then drove off.'],['Jun 14, 2023, 7:52 PM','A northbound driver hit a pedestrian, then drove off.'],['Sep 29, 2019, 6:55 PM','A distracted driver hit a cyclist.']]
+  'Blind Alley':[['Sep 29, 2019, 6:55 PM','A distracted driver hit a cyclist where this alley meets Broadway. The cyclist was injured.'],['Feb 15, 2019, 9:37 PM','A turning driver crashed here. Someone may have been hurt.']],
+  Belmont:[['Jan 8, 2023, 1:15 AM','A driver hit a pedestrian in the crosswalk, then drove off.'],['Jun 14, 2023, 7:52 PM','A northbound driver hit a pedestrian, then drove off.']]
 };
 var QUIPS={
   Cornelia:'Walk sign on. Right-turners, also on.',
@@ -186,13 +194,13 @@ var DOTS=[[454,10760,0,0,"Oct 8, 2022, 6:45 PM","No injury","Rear end"],[454,106
 var CRASHES={Cornelia:[35,6],Stratford:[27,6],Roscoe:[39,12],Buckingham:[22,3],Aldine:[37,5],Melrose:[46,5],Belmont:[86,15]};
 var TOUR=[
   {t:'315 crashes since 2019',x:'Every dot is a real crash on Broadway between Cornelia and Belmont. 13 pedestrians and 22 cyclists were hit. 54 people were hurt in all.',all:true},
-  {lv:0,x:'1 pedestrian and 4 cyclists hit. On a walk signal, right-turning drivers sweep through the crosswalk you are using.'},
-  {lv:1,x:'2 pedestrians hit. In April 2024 a left-turning driver seriously injured someone crossing Broadway here. The alley next to Optima now has a convex mirror because a neighbor asked for one.'},
-  {lv:2,x:'3 pedestrians hit, all by drivers turning left. Two of those drivers drove off.'},
-  {lv:3,x:'In 2020 a left-turning driver hit a pedestrian crossing here.'},
-  {lv:5,x:'3 pedestrians hit in the crosswalk, steps from Nettelhorst School.'},
-  {lv:6,x:'In 2023 a truck backing up hit a pedestrian. 3 cyclists hit.'},
-  {lv:7,x:'The busiest corner on the stretch. Both pedestrians hit here were hit-and-runs.'},
+  {n:'Cornelia',x:'1 pedestrian and 4 cyclists hit. On a walk signal, right-turning drivers sweep through the crosswalk you are using.'},
+  {n:'Stratford',x:'2 pedestrians hit. In April 2024 a left-turning driver seriously injured someone crossing Broadway here. The alley next to Optima now has a convex mirror because a neighbor asked for one.'},
+  {n:'Roscoe',x:'3 pedestrians hit, all by drivers turning left. Two of those drivers drove off.'},
+  {n:'Buckingham',x:'In 2020 a left-turning driver hit a pedestrian crossing here.'},
+  {n:'Aldine',x:'3 pedestrians hit in the crosswalk, steps from Nettelhorst School.'},
+  {n:'Melrose',x:'In 2023 a truck backing up hit a pedestrian. 3 cyclists hit.'},
+  {n:'Belmont',x:'The busiest corner on the stretch. Both pedestrians hit here were hit-and-runs.'},
   {t:'The pattern',x:'At least 6 of the 13 pedestrian crashes involved a driver turning left. 1 in 3 crashes on this stretch involved a parked car. There are no speed cameras on this stretch.',all:true}
 ];
 var tour=null;
@@ -200,7 +208,7 @@ DOTS.forEach(function(d,i){d.jx=d[0]+(seeded(i*3.1)-.5)*20;d.jy=d[1]+(seeded(i*7
 function tourTarget(i){
   var st=TOUR[i],cardH=Math.min(260,SH*.42);
   if(st.all){var ts=(SH-cardH-30)/9900;return {s:ts,cx:280,cy:5880+(cardH/2)/ts}}
-  var F=[[1550,1950],[2650,3000],[4500,5400],[5800,6200],[5800,6200],[6900,7700],[8450,8900],[10150,10650]][st.lv];
+  var F={Cornelia:[1550,1950],Stratford:[2650,3000],Roscoe:[4500,5400],Buckingham:[5800,6200],Aldine:[6900,7700],Melrose:[8450,8900],Belmont:[10150,10650]}[st.n];
   var ts2=Math.min(SW/760,(SH-cardH-20)/Math.max(900,F[1]-F[0]+300));
   return {s:ts2,cx:280,cy:(F[0]+F[1])/2+(cardH/2)/ts2};
 }
@@ -211,15 +219,15 @@ function openTour(back){
 }
 function setTour(i){
   tour.step=i;var st=TOUR[i],T=tourTarget(i);tour.t=T;
-  var name=st.lv!==undefined?LEVELS[st.lv].name:null;
+  var name=st.n||null;
   $('tTitle').textContent=st.t||(name+': '+CRASHES[name][0]+' crashes, '+CRASHES[name][1]+' people hurt');
   $('tText').textContent=st.x;
-  $('tLegend').style.display=(i===0||st.lv!==undefined)?'flex':'none';
+  $('tLegend').style.display=(i===0||st.n!==undefined)?'flex':'none';
   $('tStep').textContent=(i+1)+' of '+TOUR.length;
   $('tBack').style.visibility=i?'visible':'hidden';
   $('tNext').textContent=i===TOUR.length-1?'Done':'Next';
   $('tour').classList.add('show');
-  if(name)level=st.lv;
+  if(name)level=LEVELS.indexOf(levelNamed(name));
   tour.manual=false;hideDot();
 }
 function closeTour(){
@@ -279,7 +287,7 @@ function drawCrashDots(){
     });
   }
 }
-var COUNTS={Cornelia:[1,4],Stratford:[2,2],Roscoe:[3,4],Buckingham:[1,1],Aldine:[3,3],Melrose:[1,3],Belmont:[2,3]};
+var COUNTS={Cornelia:[1,4],Stratford:[2,2],Roscoe:[3,4],Buckingham:[1,1],Aldine:[3,3],Melrose:[1,3],'Blind Alley':[0,1],Belmont:[2,3]};
 
 var TYPES={
   robot:{w:22,h:28,label:'a delivery robot'},
@@ -316,14 +324,11 @@ function mphOf(v){return Math.round(v.v/MPH)}
 function cur(){return LEVELS[level]}
 function seeded(n){var x=Math.sin(n*127.1+311.7)*43758.5453;return x-Math.floor(x)}
 
-function P(i){
-  var o=pTable(i),t=LEVELS[i]&&LEVELS[i].tune;
-  if(t)for(var k in t)o[k]=t[k];
-  return o;
-}
-function pTable(i){
+function P(lv){
+  // traffic gets faster and pushier the farther south you get
+  var i=lv*7/(LEVELS.length-1),school=LEVELS[lv]&&LEVELS[lv].name==='Aldine';
   return {mean:22+i*2.3,spread:3.5,speeder:.06+i*.045,yieldP:Math.max(.08,.46-i*.05),runner:.04+i*.02,
-    gap:(2.6-i*.13)*(i===5?.75:1),bikeGap:6-i*.3,turnP:.16+i*.02,side:Math.max(3,7-i*.4)};
+    gap:(2.6-i*.13)*(school?.75:1),bikeGap:6-i*.3,turnP:.16+i*.02,side:Math.max(3,7-i*.4)};
 }
 
 /* ================= signals ================= */
@@ -379,7 +384,7 @@ function makeParked(){
     var y=0;
     while(y<GEO.H){
       var van=Math.random()<.12,h=van?80:62;
-      var bad=(sd[0]==='W'&&Math.abs(y-DRIVE_Y)<h/2+46)||(sd[0]==='W'&&y>BIKELANE.y0-h/2-10&&y<5262+h/2)||nearAny(y,h/2+16)||nearMouth(y,sd[0],h/2+30)||BUS.some(function(b){return b[0]===sd[2]&&y>b[1]-190&&y<b[1]+70})||
+      var bad=(sd[0]==='W'&&nearDrive(y,h/2+46))||(sd[0]==='W'&&y>BIKELANE.y0-h/2-10&&y<5262+h/2)||nearAny(y,h/2+16)||nearMouth(y,sd[0],h/2+30)||BUS.some(function(b){return b[0]===sd[2]&&y>b[1]-190&&y<b[1]+70})||
         LEVELS.some(function(L){return L.ctrl!=='none'&&(Math.abs(y-L.sb)<h/2+60||Math.abs(y-L.nb)<h/2+60)});
       if(!bad&&Math.random()<.9)parked.push({x:sd[1],y:y,w:van?44:38,h:h,van:van,color:pick(CAR_COLORS),side:sd[0]});
       y+=h+rnd(12,40);
@@ -422,7 +427,7 @@ function makeTrees(){
   trees=[];
   [[150,'W'],[410,'E']].forEach(function(t){
     for(var y=0;y<GEO.H;y+=rnd(100,150)){
-      if(nearAny(y,34)||nearMouth(y,t[1],30)||(t[1]==='W'&&y>DRIVE_Y-60&&y<DRIVE_Y+125))continue;
+      if(nearAny(y,34)||nearMouth(y,t[1],30)||(t[1]==='W'&&DRIVES.some(function(d){return y>d.y-60&&y<d.y+125})))continue;
       trees.push({x:t[0]+rnd(-3,3),y:y,r:rnd(20,28),s:Math.random()});
     }
   });
@@ -453,34 +458,34 @@ function desired(v){
   if(v.type==='bus')m=Math.min(m,p.mean-3);
   return Math.max(12,m)*MPH;
 }
-function activeMouths(){var cw=cur().cw;return MOUTHS.filter(function(m){return m.y>cw-1000&&m.y<cw+450})}
+function focusY(){return player.y}
+// side streets with traffic coming out of them: the ones near you and the ones you're walking toward
+function activeMouths(){var fy=focusY();return MOUTHS.filter(function(m){return m.y>fy-1000&&m.y<fy+1500})}
 
 function spaceFree(x,y,w,h){
   for(var i=0;i<vehicles.length;i++){var o=vehicles[i];if(Math.abs(o.x-x)<(o.w+w)/2+4&&Math.abs(o.y-y)<(o.h+h)/2+30)return false}
   return true;
 }
 function spawnLane(key){
-  var ln=LANE[key],p=P(level),cw=cur().cw;
+  var ln=LANE[key],p=P(level),cw=cur().cw,fy=focusY(),school=cur().name==='Aldine';
   var type=ln.kind==='micro'?(Math.random()<.3?'scooter':'bike'):vehType(),t=TYPES[type];
-  var y=ln.dir===1?cw-1500:cw+1500;
+  var y=ln.dir===1?fy-1500:fy+1500;
   if(!spaceFree(ln.x,y,t.w,t.h))return false;
   var v=newVehicle(type,ln.kind);
   v.lane=key;v.x=ln.x;v.y=y;v.rot=ln.dir===1?Math.PI:0;v.v=desired(v);
   if(type==='bus')v.stops=BUS.filter(function(b){return b[0]===ln.dir&&(b[1]-y)*ln.dir>0}).map(function(b){return b[1]}).sort(function(a,b){return (a-b)*ln.dir});
-  if(ln.kind==='car'&&type!=='bus'&&Math.random()<p.turnP)planTurn(v);
-  else if(ln.kind==='car'&&(type==='car'||type==='suv')&&Math.random()<(level===5?.28:.06)){
-    var ry=level===5?(ln.dir===1?cw+rnd(70,520):cw+rnd(160,520)):(ln.dir===1?cw-rnd(180,520):cw+rnd(180,520));
+  if(ln.kind==='car'&&(type==='car'||type==='suv')&&Math.random()<(school?.28:.06)){
+    var ry=school?(ln.dir===1?cw+rnd(70,520):cw+rnd(160,520)):(ln.dir===1?cw-rnd(180,520):cw+rnd(180,520));
     if(!nearAny(ry,60))v.ride={y:ry,t:0};
   }
   vehicles.push(v);return true;
 }
-function planTurn(v){
-  var ln=LANE[v.lane],opts=activeMouths().filter(function(m){return m.d==='out'||m.d==='two'});
-  if(!opts.length)return;
-  var m=pick(opts),dir=ln.dir,right=(dir===1)===(m.s==='W');
+function planTurn(v,m){
+  var ln=LANE[v.lane],dir=ln.dir,right=(dir===1)===(m.s==='W');
   var yc=m.curb[1]+m.outOff,sy=dir===1?yc-60-(m.hw>60?30:0):yc+60+(m.hw>60?30:0);
   var out=m.p.slice().reverse();
   var path=mkPath([bezP({x:ln.x,y:sy},{x:ln.x,y:yc},{x:m.curb[0],y:yc}),polyP(out,m.outOff)]);
+  if(m.yieldP!==undefined)v.yielder=Math.random()<m.yieldP;
   v.turn={m:m,sy:sy,path:path,left:!right};v.blink=right?'R':'L';
 }
 function spawnSide(m){
@@ -524,8 +529,8 @@ function boxCheckRelease(v){
 }
 function updateBots(dt){
   var L=cur();
-  if(level!==7||mode!=='play'){bots=[];return}
-  if(wp>=4&&!bots.length&&!robotRolled){robotRolled=true;if(Math.random()<.5)bots.push({type:'robot',kind:'micro',w:22,h:28,x:172,y:10790,v:4*MPH,rot:0,mode:'bot',t:0,say:0})}
+  if(L.name!=='Belmont'||mode!=='play'){bots=[];return}
+  if(player.y>10500&&player.x<RL&&!bots.length&&!robotRolled){robotRolled=true;if(Math.random()<.5)bots.push({type:'robot',kind:'micro',w:22,h:28,x:172,y:10790,v:4*MPH,rot:0,mode:'bot',t:0,say:0})}
   bots.forEach(function(b){
     b.t+=dt;
     var tx=Math.sin(b.t*1.3)>0?138:178;b.x+=(tx-b.x)*Math.min(1,dt*2);
@@ -550,11 +555,11 @@ function drawBots(){
       text('Sorry!',b.x+22,b.y-33,13,'#15171a','left',900);ctx.restore()}
   });
 }
-function spawnDriveway(){
+function spawnDriveway(d){
   var v=newVehicle(Math.random()<.35?'suv':'car','car');v.yielder=false;
-  var y=DRIVE_Y,path=mkPath([lineP({x:-260,y:y},{x:RL-4,y:y}),bezP({x:RL-4,y:y},{x:LANE.SB.x,y:y},{x:LANE.SB.x,y:y+130})]);
+  var y=d.y,path=mkPath([lineP({x:-260,y:y},{x:RL-4,y:y}),bezP({x:RL-4,y:y},{x:LANE.SB.x,y:y},{x:LANE.SB.x,y:y+130})]);
   var q=posAt(path,0);if(!spaceFree(q.x,q.y,v.h+30,v.w))return false;
-  v.mode='path';v.path=path;v.s=0;v.stream='dw';v.driveway=true;v.mouth={sig:null,curb:[RL,y]};v.move='WSB';v.merge='SB';
+  v.mode='path';v.path=path;v.s=0;v.stream='dw';v.driveway=true;v.drive=d;v.mouth={sig:null,curb:[RL,y]};v.move='WSB';v.merge='SB';
   v.gate=undefined;v.crosses=[];v.pathSpeed=rnd(14,18)*MPH;
   v.x=q.x;v.y=q.y;v.rot=q.rot;v.v=v.pathSpeed;v.blink='R';
   vehicles.push(v);return true;
@@ -627,19 +632,19 @@ function playerOnMouth(m,pad){return mode==='play'&&!transitioning&&(m.s==='W'?p
 function onSidewalk(){return player.x<RL+1||player.x>RR-1}
 function playerInCrosswalk(){
   if(mode!=='play'||transitioning||player.x<=RL+2||player.x>=RR-2)return false;
-  var cs=cur().cws;for(var i=0;i<cs.length;i++)if(Math.abs(player.y-cs[i])<=22)return cs[i];
+  var cs=ROUTE_CWS;for(var i=0;i<cs.length;i++)if(Math.abs(player.y-cs[i])<=22)return cs[i];
   return false;
 }
-function crossAll(path){return cur().cws.map(function(c){var r=crossRange(path,c);if(r)r.c=c;return r}).filter(Boolean)}
+function crossAll(path){return ROUTE_CWS.map(function(c){var r=crossRange(path,c);if(r)r.c=c;return r}).filter(Boolean)}
 function crossFor(v,c){if(!v.crosses)return null;for(var i=0;i<v.crosses.length;i++)if(v.crosses[i].c===c)return v.crosses[i];return null}
 function inDanger(){
   if(!onSidewalk())return true;
-  if(cur().walk&&player.x<RL&&Math.abs(player.y-DRIVE_Y)<44)return true;
+  if(player.x<RL&&nearDrive(player.y,44))return true;
   return MOUTHS.some(function(m){return (m.s==='W'?player.x<RL:player.x>RR)&&Math.abs(player.y-m.curb[1])<m.hw})
 }
 
 function updateTraffic(dt){
-  var p=P(level),CL=cur(),cw=CL.cw,inCross=playerInCrosswalk();
+  var p=P(level),CL=cur(),fy=focusY(),inCross=playerInCrosswalk();
   LANE_KEYS.forEach(function(k){
     laneTimers[k]-=dt;
     if(laneTimers[k]<=0){var ok=spawnLane(k),g=LANE[k].kind==='micro'?p.bikeGap:p.gap;laneTimers[k]=ok?g*rnd(.5,1.7):.4}
@@ -648,12 +653,12 @@ function updateTraffic(dt){
     if(m.d!=='in'&&m.d!=='two')return;
     var key=m.n+m.s;if(mouthTimers[key]===undefined)mouthTimers[key]=rnd(1,5);
     mouthTimers[key]-=dt;
-    if(mouthTimers[key]<=0){var ok=spawnSide(m);mouthTimers[key]=ok?p.side*rnd(.6,1.5)*(m.hw>60?.6:1):1.5}
+    if(mouthTimers[key]<=0){var ok=spawnSide(m);mouthTimers[key]=ok?p.side*rnd(.6,1.5)*(m.hw>60?.6:1)*(m.busy||1):1.5}
   });
 
   updateBots(dt);
-  if(CL.walk){dwTimer-=dt;if(dwTimer<=0){dwTimer=spawnDriveway()?rnd(2.8,6):.8}}
-  if(CL.name==='Roscoe'){gwTimer-=dt;if(gwTimer<=0){gwTimer=spawnGreenway()?rnd(5,11):1}}
+  DRIVES.forEach(function(d){if(Math.abs(fy-d.y)>900)return;d.t-=dt;if(d.t<=0)d.t=spawnDriveway(d)?rnd(2.8,6):.8});
+  if(Math.abs(fy-5000)<1100){gwTimer-=dt;if(gwTimer<=0){gwTimer=spawnGreenway()?rnd(5,11):1}}
   for(var i=0;i<vehicles.length;i++){
     var v=vehicles[i];
     if(v.mode==='lane')laneStep(v,dt,inCross,CL);
@@ -661,8 +666,8 @@ function updateTraffic(dt){
   }
   vehicles=vehicles.filter(function(v){
     if(v.dead)return false;
-    if(v.mode==='path')return true;
-    return LANE[v.lane].dir===1?v.y<cw+1650:v.y>cw-1650;
+    if(v.mode==='path')return Math.abs(v.y-fy)<2200;
+    return LANE[v.lane].dir===1?v.y<fy+1650:v.y>fy-1650;
   });
 }
 
@@ -704,6 +709,15 @@ function laneStep(v,dt,inCross,CL){
     }
     break;
   }
+  // coming up on a side street: decide whether to turn into it
+  if(!v.turn&&!v.ride&&v.kind==='car'&&v.type!=='bus'){
+    for(var mi=0;mi<MOUTHS.length;mi++){
+      var M=MOUTHS[mi];if(M.d==='in')continue;
+      var ahead=(M.curb[1]-v.y)*dir;if(ahead<520||ahead>1000)continue;
+      v.seen=v.seen||{};if(v.seen[mi])continue;v.seen[mi]=1;
+      if(Math.random()<(M.turnP||P(level).turnP*.6)){planTurn(v,M);break}
+    }
+  }
   // turning off Broadway
   if(v.turn){
     var T=v.turn,dT=(T.sy-v.y)*dir;
@@ -735,7 +749,7 @@ function laneStep(v,dt,inCross,CL){
     if(dy>-4&&(v.braking||(v.v*v.v)/(2*Math.max(dy,1))<=170)){v.braking=true;v.ctrlHold=true;vt=Math.min(vt,Math.sqrt(2*150*Math.max(0,dy-2)))}
   }else v.braking=false;
   var g=gapAhead(v);
-  CL.cws.forEach(function(c){var dcw=(c-dir*20-front)*dir;
+  ROUTE_CWS.forEach(function(c){var dcw=(c-dir*20-front)*dir;
     if(dcw>-2&&dcw<260&&g.d<dcw+40+v.h&&g.v<3*MPH)vt=Math.min(vt,Math.sqrt(2*150*Math.max(0,dcw-2)))});
   var held=vt<1;
   vt=followLimit(v,vt);
@@ -762,7 +776,7 @@ function pathStep(v,dt,inCross,CL){
       v.stopT+=dt;
       var m=v.mouth,go=m.sig?sig(m.sig).side==='G':v.stopT>(v.yielder?1:.4);
       var sk=boxKey(v.mouth.curb[1]),free=v.driveway||v.kind==='micro'||boxFree(sk,v);
-      if(free&&go&&sideGapOK(v)&&!(v.yielder&&inCross&&crossFor(v,inCross))&&!(v.yielder&&v.driveway&&onSidewalk()&&Math.abs(player.y-DRIVE_Y)<80)){v.gated=true;if(!v.driveway&&v.kind!=='micro')boxTake(sk,v,v.mouth.curb[1])}
+      if(free&&go&&sideGapOK(v)&&!(v.yielder&&inCross&&crossFor(v,inCross))&&!(v.yielder&&m.s&&playerOnMouth(m,12))&&!(v.yielder&&v.driveway&&onSidewalk()&&Math.abs(player.y-v.drive.y)<80)){v.gated=true;if(!v.driveway&&v.kind!=='micro')boxTake(sk,v,v.mouth.curb[1])}
       if(free&&!m.sig&&v.stopT>16&&sideGapOK(v)){v.gated=true;if(!v.driveway&&v.kind!=='micro')boxTake(sk,v,v.mouth.curb[1])}
     }
   }
@@ -815,24 +829,23 @@ function checkPlayer(){
 
 /* ================= game flow ================= */
 
-function viewTargetFor(i){return (i===level?player.y:LEVELS[i].route[0][1])-VH*.56}
-function cumOf(r){var c=[0];for(var i=1;i<r.length;i++)c.push(c[i-1]+Math.hypot(r[i][0]-r[i-1][0],r[i][1]-r[i-1][1]));return c}
+function viewTargetFor(i){return (i===level?player.y:ROUTE[LEVELS[i].w0][1])-VH*.56}
 function railAt(sv){
-  var r=cur().route,c=cumOf(r);sv=clamp(sv,0,c[c.length-1]);
+  var r=ROUTE,c=ROUTE_C;sv=clamp(sv,0,c[c.length-1]);
   for(var i=0;i<r.length-1;i++)if(sv<=c[i+1]||i===r.length-2){
     var L=(c[i+1]-c[i])||1,t=(sv-c[i])/L;
     return {x:r[i][0]+(r[i+1][0]-r[i][0])*t,y:r[i][1]+(r[i+1][1]-r[i][1])*t,i:i};
   }
 }
 function placePlayer(checkpoint){
-  var r=cur().route;if(!checkpoint)wp=1;
-  player.s=cumOf(r)[Math.max(0,wp-1)];var q=railAt(player.s);
+  if(!checkpoint)wp=1;
+  player.s=ROUTE_C[Math.max(0,wp-1)];var q=railAt(player.s);
   player.x=q.x;player.y=q.y;player.dx=player.dy=0;player.face=1;player.ang=Math.PI/2;player.walk=0;
   cameraTarget=player.y-VH*.56;held=null;pend=0;
 }
 // Which way along the line does this input push you? +1 forward, -1 back, 0 neither.
 function railSign(u){
-  var r=cur().route,c=cumOf(r),sv=player.s,q=railAt(sv),i=q.i;
+  var r=ROUTE,c=ROUTE_C,sv=player.s,q=railAt(sv),i=q.i;
   function tan(k){var a=r[k],b=r[k+1],L=Math.hypot(b[0]-a[0],b[1]-a[1])||1;return [(b[0]-a[0])/L,(b[1]-a[1])/L]}
   function dot(a,b){return a[0]*b[0]+a[1]*b[1]}
   var t=tan(i),d=dot(u,t);
@@ -844,7 +857,7 @@ function railSign(u){
 var held=null,pend=0,pendDir=null,keysDown=[],stepAcc=0,idleT=0;
 // Which way does the line run where you are standing? At a corner, the next stretch wins.
 function railAxis(){
-  var r=cur().route,c=cumOf(r),q=railAt(player.s||0),i=q.i;
+  var r=ROUTE,c=ROUTE_C,q=railAt(player.s||0),i=q.i;
   if(i+1<r.length-1&&c[i+1]-player.s<4)i++;
   return Math.abs(r[i+1][0]-r[i][0])>=Math.abs(r[i+1][1]-r[i][1])?'h':'v';
 }
@@ -855,29 +868,24 @@ function walkUpdate(dt){
   if(!u||!d){idleT+=dt;return}
   idleT=0;
   var sg=railSign(u);if(!sg){pend=0;return}
-  var r=cur().route,c=cumOf(r),minS=c[Math.max(0,wp-1)];
+  var r=ROUTE,c=ROUTE_C,minS=c[Math.max(0,wp-1)];
   var ns=clamp(player.s+sg*d,minS,c[c.length-1]),q=railAt(ns),mx=q.x-player.x,my=q.y-player.y;
   if(Math.abs(mx)+Math.abs(my)<.01)return;
   player.s=ns;player.x=q.x;player.y=q.y;player.ang=Math.atan2(mx,-my);player.walk+=Math.hypot(mx,my);
   stepAcc+=Math.hypot(mx,my);if(stepAcc>22){stepAcc=0;tick()}
   cameraTarget=player.y-VH*.56;
-  while(wp<r.length&&player.s>=c[wp]-3){wp++;if(wp>=r.length){held=null;keysDown=[];pend=0;clearLevel();return}chime()}
+  while(wp<r.length&&player.s>=c[wp]-3){
+    wp++;if(wp<=cur().w1)continue;
+    // through this stage's crossing
+    if(level===LEVELS.length-1){held=null;keysDown=[];pend=0;finishWalk();return}
+    level++;chime();updateHUD();toastT=TOAST_T;
+  }
 }
 function move(dx,dy){pendDir=[dx,dy];pend=40}
 function updateHUD(){
   $('levelName').textContent=cur().name;
   var h='';for(var i=0;i<3;i++)h+='<i'+(i<lives?'':' class="off"')+'></i>';
   $('lives').innerHTML=h;$('lives').setAttribute('aria-label',lives+' lives');
-}
-function moveOld(dx,dy){
-  if(mode!=='play'||transitioning)return;
-  var r=cur().route,ys=r.map(function(q){return q[1]}),nx=clamp(player.x+dx*STEP,140,420),ny=clamp(player.y+dy*STEP,Math.min.apply(0,ys)-70,Math.max.apply(0,ys)+70);
-  if(dx)player.face=dx;
-  if(blockedAt(nx,ny)){bump();return}
-  player.dx=nx-player.x;player.dy=ny-player.y;player.x=nx;player.y=ny;player.hop=1;tick();
-  cameraTarget=player.y-VH*.56;
-  var t=r[wp];
-  if(t&&Math.abs(player.x-t[0])<=12&&Math.abs(player.y-t[1])<=24){wp++;if(wp>=r.length)clearLevel();else chime()}
 }
 function crash(v){
   var m=mphOf(v),micro=v.kind==='micro',L=cur();
@@ -891,7 +899,7 @@ function crash(v){
   var c=COUNTS[dk];
   $('rTitle').textContent='Hit by '+what;$('rSub').textContent=sub;
   $('rWhen').textContent='It happened here, '+r[0];$('rText').textContent=r[1];
-  $('rCount').textContent=v.driveway?'Tip: the round mirror on the corner shows cars coming before you can see them.':dk+' since 2019: '+plural(c[0],'pedestrian')+' and '+plural(c[1],'cyclist')+' hit.';
+  $('rCount').textContent=v.driveway?(v.drive.mirror?'Tip: the round mirror on the corner shows cars coming before you can see them.':'Tip: watch for headlights in the alley before you step out.'):dk+' since 2019: '+plural(c[0],'pedestrian')+' and '+plural(c[1],'cyclist')+' hit.';
   $('rBtn').textContent=lives===2?'Walk it off':lives===1?'One more try':'See how you did';
   mode='hit';
   setTimeout(function(){if(mode==='hit'){report.classList.add('show');$('rBtn').focus()}},380);
@@ -904,20 +912,22 @@ function dismissReport(){
 }
 function goToLevel(i){
   BOX={};
-  level=i;vehicles=[];laneTimers={SB:0,NB:0,SBB:0,NBB:0};mouthTimers={};
-  placePlayer();cameraTarget=viewTargetFor(level);cameraY=cameraTarget;
+  level=i;vehicles=[];laneTimers={SB:0,NB:0,SBB:0,NBB:0};mouthTimers={};DRIVES.forEach(function(d){d.t=2});toastT=0;
+  wp=LEVELS[i].w0+1;placePlayer(true);cameraTarget=viewTargetFor(level);cameraY=cameraTarget;
   warmUp(22);updateHUD();
-  pigeons=[];var cw=cur().cw;
-  for(var f=0,tries=0;f<3&&tries<40;tries++){
-    var west=f!==1,px=west?rnd(146,168):rnd(392,412),py=cw+rnd(45,170)*(Math.random()<.7?1:-1);
-    if(nearMouth(py,west?'W':'E',40)||Math.abs(py-cw)<40)continue;
-    f++;for(var k=0;k<3+Math.floor(Math.random()*4);k++)pigeons.push({x:px+rnd(-10,10),y:py+rnd(-12,12),a:Math.random()*6,fly:0,vx:0,vy:0})}
+  pigeons=[];
+  LEVELS.forEach(function(L){
+    var cw=L.cw;
+    for(var f=0,tries=0;f<2&&tries<40;tries++){
+      var west=f!==1,px=west?rnd(146,168):rnd(392,412),py=cw+rnd(45,170)*(Math.random()<.7?1:-1);
+      if(nearMouth(py,west?'W':'E',40)||Math.abs(py-cw)<40||(west&&nearDrive(py,60)))continue;
+      f++;for(var k=0;k<3+Math.floor(Math.random()*4);k++)pigeons.push({x:px+rnd(-10,10),y:py+rnd(-12,12),a:Math.random()*6,fly:0,vx:0,vy:0})}
+  });
 }
-function clearLevel(){
+function finishWalk(){
   if(transitioning)return;
   transitioning=true;chime();
-  if(level===LEVELS.length-1){setTimeout(function(){mode='over';hud.classList.add('hidden');showEnd(true)},700);return}
-  fadeName=LEVELS[level+1].name;fadeDir=1;
+  setTimeout(function(){mode='over';hud.classList.add('hidden');showEnd(true)},700);
 }
 function startGame(){
   ensureAudio();
@@ -939,22 +949,22 @@ function setPaused(on){
   }
 }
 function showCard(html){card.innerHTML=html;overlay.classList.remove('hidden')}
-function best(){try{return JSON.parse(localStorage.getItem('xb-best10')||'0')}catch(e){return 0}}
-function saveBest(n){try{if(n>best())localStorage.setItem('xb-best10',JSON.stringify(n))}catch(e){}}
+function best(){try{return JSON.parse(localStorage.getItem('xb-best-walk')||'0')}catch(e){return 0}}
+function saveBest(n){try{if(n>best())localStorage.setItem('xb-best-walk',JSON.stringify(n))}catch(e){}}
 function showTitle(){
   var b=best();
   showCard('<div class="plate"><h1>Cross<br>Broadway</h1></div><div class="body">'+
-    '<p>Cross at every corner from Cornelia to Belmont. Traffic gets faster each time. The pigeons are on your side.</p>'+
-    '<p class="fine">Hold the left or right side of the screen to walk along the yellow line. When it turns, tap or hold above or below your walker. Arrow keys work too.'+(b?' Your best: '+b+' of 8.':'')+'</p>'+
+    '<p>Walk Broadway from Cornelia to Belmont, crossing at the crosswalks. Traffic gets faster the farther you go. The pigeons are on your side.</p>'+
+    '<p class="fine">Hold the left or right side of the screen to walk along the yellow line. When it turns, tap or hold above or below your walker. Arrow keys work too.'+(b?' Your best: '+b+' of '+LEVELS.length+'.':'')+'</p>'+
     '<div class="actions"><button class="btn" id="startBtn">Start at Cornelia</button><button class="btn ghost" id="tourBtn">See the real crashes</button></div></div>');
   $('startBtn').onclick=startGame;$('tourBtn').onclick=function(){openTour('title')};
 }
 var lastWon=false;
 function showEnd(won){
   lastWon=won;
-  var n=won?8:level;saveBest(n);
+  var n=won?LEVELS.length:level;saveBest(n);
   showCard('<div class="plate'+(won?'':' red')+'"><h1>'+(won?'You made it<br>to Belmont.':'Broadway<br>wins.')+'</h1></div><div class="body">'+
-    '<p><strong>'+(won?'All 8 crossings.':'You crossed '+n+' of 8.')+'</strong>'+(fastest?' The fastest car that passed you was going '+fastest+' mph. The limit is 30.':'')+'</p>'+
+    '<p><strong>'+(won?'All '+LEVELS.length+' crossings.':'You made '+n+' of '+LEVELS.length+' crossings.')+'</strong>'+(fastest?' The fastest car that passed you was going '+fastest+' mph. The limit is 30.':'')+'</p>'+
     (won?'<p>Walgreens is right there if you need to sit down.</p>':'<p>Broadway usually wins. That is the point.</p>')+'<p>Since 2019, 13 pedestrians and 22 cyclists have been hit on this stretch of Broadway.</p>'+
     '<div class="actions"><button class="btn" id="tourBtn">See where people were hit</button><button class="btn ghost" id="againBtn">Play again</button></div>'+
     '<p class="fine">Crashes: City of Chicago Traffic Crashes data. Map: OpenStreetMap. Speed and risk: AAA Foundation for Traffic Safety.</p></div>');
@@ -1031,7 +1041,7 @@ function drawFadeCard(){
   var titleH=40,gap=18,qh=ql.length*23,ih=il.length?il.length*22+20:0;
   var total=titleH+gap+qh+(ih?(qh?gap:0)+ih:0),y=SH/2-total/2;
   ctx.globalAlpha=fade;
-  text('LEVEL '+num+' OF '+LEVELS.length,SW/2,y-14,13,'rgba(255,255,255,.6)','center',800);
+  text('CROSSING '+num+' OF '+LEVELS.length,SW/2,y-14,13,'rgba(255,255,255,.6)','center',800);
   var tfs=40;ctx.font='900 40px Overpass, Arial, sans-serif';tfs=Math.max(24,Math.min(40,40*(SW-32)/ctx.measureText(fadeName).width));
   text(fadeName,SW/2,y+titleH/2,tfs,'#fff','center',900);y+=titleH+gap;
   ql.forEach(function(l,i){text(l,SW/2,y+11+i*23,16,'rgba(255,255,255,.82)','center',600)});y+=qh;
@@ -1040,6 +1050,20 @@ function drawFadeCard(){
     rrect(SW/2-bw/2,y,bw,ih,12);ctx.fillStyle='rgba(255,210,63,.14)';ctx.fill();
     il.forEach(function(l,i){text(l,SW/2,y+10+11+i*22,15,'#ffd23f','center',800)});
   }
+  ctx.globalAlpha=1;
+}
+// When you finish a crossing, the next one is named at the top without stopping the walk.
+var TOAST_T=3.6,toastT=0;
+function drawToast(){
+  if(toastT<=0||mode!=='play')return;
+  var L=cur(),ins=SHORT[L.name]||'',mw=Math.min(360,SW-24),il=ins?wrapLines(ins,mw-28,14,800):[];
+  var h=56+il.length*19,x=SW/2-mw/2,y=54;
+  ctx.globalAlpha=clamp(Math.min(toastT*2,(TOAST_T-toastT)*4),0,1);
+  rrect(x,y,mw,h,12);ctx.fillStyle='rgba(18,19,20,.86)';ctx.fill();
+  text('CROSSING '+(level+1)+' OF '+LEVELS.length,SW/2,y+14,11,'rgba(255,255,255,.6)','center',800);
+  var fs=22;ctx.font='900 22px Overpass, Arial, sans-serif';fs=Math.min(22,22*(mw-24)/ctx.measureText(L.name).width);
+  text(L.name,SW/2,y+35,fs,'#fff','center',900);
+  il.forEach(function(l,i){text(l,SW/2,y+58+i*19,14,'#ffd23f','center',800)});
   ctx.globalAlpha=1;
 }
 function vis(y0,y1){return y1>cameraY-60&&y0<cameraY+VH+60}
@@ -1056,6 +1080,7 @@ function draw(){
     ctx.fillStyle='rgba(18,19,20,'+fade+')';ctx.fillRect(0,0,SW,SH);
     if(fadeName)drawFadeCard();
   }
+  drawToast();
 }
 
 function drawWire(){
@@ -1066,7 +1091,7 @@ function drawWire(){
   ctx.strokeStyle='#c9c4b8';ctx.lineWidth=1.5*lw;ctx.beginPath();ctx.moveTo(RL,y0);ctx.lineTo(RL,y1);ctx.moveTo(RR,y0);ctx.lineTo(RR,y1);ctx.stroke();
   ctx.strokeStyle='rgba(214,170,40,.6)';ctx.lineWidth=1.2*lw;ctx.beginPath();ctx.moveTo(280,y0);ctx.lineTo(280,y1);ctx.stroke();
   CROSS.forEach(function(c){if(vis(c[0]-20,c[0]+20)&&c[1]!=='none'){ctx.strokeStyle='#c9c4b8';ctx.setLineDash([4*lw,4*lw]);ctx.strokeRect(RL,c[0]-16,RR-RL,32);ctx.setLineDash([])}});
-  ctx.fillStyle='#e4e0d6';ctx.fillRect(-300,DRIVE_Y-30,RL+300,60);
+  ctx.fillStyle='#e4e0d6';DRIVES.forEach(function(d){ctx.fillRect(-300,d.y-30,RL+300,60)});
   BLD.forEach(function(b){
     if(!vis(b.y0,b.y1))return;
     poly(b.pts);ctx.fillStyle=b.name?'#fbf3d6':'#ffffff';ctx.fill();
@@ -1079,7 +1104,7 @@ function drawWire(){
     ctx.fillText(m.n.toUpperCase(),x,m.curb[1]);
   });
   ctx.save();ctx.translate(140,0);ctx.restore();
-  if(SC>.12&&vis(DRIVE_Y-40,DRIVE_Y+40)){var afs=11/SC;ctx.font='800 '+afs+'px Overpass, Arial, sans-serif';ctx.fillStyle='#8a867c';ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText('ALLEY',RL-70/SC,DRIVE_Y)}
+  if(SC>.12)DRIVES.forEach(function(d){if(!vis(d.y-40,d.y+40))return;var afs=11/SC;ctx.font='800 '+afs+'px Overpass, Arial, sans-serif';ctx.fillStyle='#8a867c';ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText('ALLEY',RL-70/SC,d.y)});
   if(SC>.3)BLD.forEach(function(b){if(b.name&&vis(b.y0,b.y1))landmarkLabel(b)});
   drawOffMarks();
   drawCrashDots();
@@ -1104,10 +1129,11 @@ function drawWorld(){
   ctx.strokeStyle='#e2bf3c';ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(277.6,y0);ctx.lineTo(277.6,y1);ctx.moveTo(282.4,y0);ctx.lineTo(282.4,y1);ctx.stroke();
   drawBikeLane();
   drawMarkings();
-  if(vis(DRIVE_Y-60,DRIVE_Y+60)){
-    rect(30,DRIVE_Y-30,BL-30,60,'#4a4d50');rect(BL,DRIVE_Y-30,RL-BL,60,'#c2beb3');
-    var ag=ctx.createLinearGradient(30,0,110,0);ag.addColorStop(0,'rgba(20,21,22,.95)');ag.addColorStop(1,'rgba(20,21,22,0)');ctx.fillStyle=ag;ctx.fillRect(30,DRIVE_Y-30,80,60);
-  }
+  DRIVES.forEach(function(d){
+    if(!vis(d.y-60,d.y+60))return;
+    rect(30,d.y-30,BL-30,60,'#4a4d50');rect(BL,d.y-30,RL-BL,60,'#c2beb3');
+    var ag=ctx.createLinearGradient(30,0,110,0);ag.addColorStop(0,'rgba(20,21,22,.95)');ag.addColorStop(1,'rgba(20,21,22,0)');ctx.fillStyle=ag;ctx.fillRect(30,d.y-30,80,60);
+  });
   drawBuildings();
   drawParked();
   drawImpacts();
@@ -1303,7 +1329,7 @@ function drawMirror(){
   ctx.beginPath();ctx.arc(mx,my,r-3,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();ctx.clip();
   // the reflection: whatever is coming down the alley
   vehicles.forEach(function(v){
-    if(!v.driveway||v.x+v.h/2>=90)return;
+    if(!v.driveway||!v.drive.mirror||v.x+v.h/2>=90)return;
     var t=clamp((v.x+260)/350,0,1),cx=mx-12+t*20,sz=4+t*7;
     ctx.fillStyle=v.color;rrect(cx-sz,my-sz*.6,sz*2,sz*1.2,2);ctx.fill();
     ctx.fillStyle='#fff3b8';ctx.fillRect(cx+sz-2,my-sz*.5,2,2);ctx.fillRect(cx+sz-2,my+sz*.5-2,2,2);
@@ -1313,9 +1339,9 @@ function drawMirror(){
 }
 // Crossing guard at the Nettelhorst crosswalk during school rush
 var guard={x:RL-20,y:7634+30};
-function guardOn(){return level===5&&mode==='play'&&playerInCrosswalk()===7634}
+function guardOn(){return mode==='play'&&playerInCrosswalk()===7634}
 function drawGuard(){
-  if(level!==5||mode==='title'||!vis(7550,7720))return;
+  if(mode==='title'||mode==='tour'||!vis(7550,7720))return;
   var on=guardOn(),tx=on?RL+40:RL-20,ty=on?7634-8:7634+30;
   guard.x+=(tx-guard.x)*.12;guard.y+=(ty-guard.y)*.12;
   person(guard.x,guard.y,'#c8ff3c',on?Math.PI/2:0,worldTime*6*(on?1:0),1.15);
@@ -1331,7 +1357,7 @@ function person(x,y,coat,ang,step,scale){
 }
 function drawHint(){
   if(mode!=='play'||transitioning||idleT<1.2)return;
-  var r=cur().route,t=r[wp];if(!t)return;
+  var r=ROUTE,t=r[wp];if(!t)return;
   var a=Math.atan2(t[1]-player.y,t[0]-player.x),pulse=reduceMotion?0:Math.sin(worldTime*4)*4,dist=30+pulse;
   ctx.save();ctx.translate(player.x+Math.cos(a)*dist,player.y+Math.sin(a)*dist);ctx.rotate(a);
   ctx.globalAlpha=Math.min(1,(idleT-1.2)*2)*.9;ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.lineCap='round';ctx.lineJoin='round';
@@ -1339,7 +1365,7 @@ function drawHint(){
 }
 function drawGuide(){
   if(mode!=='play')return;
-  var r=cur().route,pts=[[player.x,player.y]].concat(r.slice(wp));
+  var r=ROUTE,pts=[[player.x,player.y]].concat(r.slice(wp,wp+4));
   if(pts.length<2)return;
   ctx.save();ctx.setLineDash([10,9]);ctx.lineDashOffset=-worldTime*30;ctx.lineCap='round';
   ctx.strokeStyle='rgba(255,210,63,.95)';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
@@ -1407,10 +1433,11 @@ function frame(t){
   if(fadeHold>0){fadeHold-=dt;if(fadeHold<=0)fadeDir=-1}
   if(fadeDir){
     fade=clamp(fade+fadeDir*dt*1.8,0,1);
-    if(fadeDir===1&&fade>=1){if(fadeName!==cur().name)goToLevel(level+1);fadeDir=0;fadeHold=1.9}
+    if(fadeDir===1&&fade>=1){fadeDir=0;fadeHold=1.9}
     else if(fadeDir===-1&&fade<=0){fadeDir=0;transitioning=false;fadeName=''}
   }
   walkUpdate(dt);
+  if(mode==='play'&&!transitioning)toastT=Math.max(0,toastT-dt);
   hud.style.opacity=String(1-fade);
   if(mode==='play'||mode==='title'||mode==='over'){worldTime+=dt;updateTraffic(dt);checkPlayer();inv=Math.max(0,inv-dt)}
   taps.forEach(function(t){t.t-=dt});taps=taps.filter(function(t){return t.t>0});
