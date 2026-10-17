@@ -68,6 +68,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #dotCard i{font-style:normal;display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:0}
 #overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(10,12,12,.35);overflow:auto}
 #overlay.hidden{display:none}
+#overlay.low{align-items:flex-end;background:linear-gradient(rgba(10,12,12,0) 40%,rgba(10,12,12,.55))}
+#overlay.low .card{margin:auto auto 0}
 .card{width:min(400px,100%);background:var(--paper);color:var(--ink);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.35);overflow:hidden;margin:auto}
 .plate{background:var(--sign);color:#fff;padding:12px 14px 10px;border:3px solid #fff;border-radius:9px;margin:9px 9px 0;box-shadow:0 0 0 2px var(--sign)}
 .plate h1{margin:0;font-weight:900;font-size:clamp(32px,9vw,46px);line-height:.9;text-transform:uppercase}
@@ -429,7 +431,7 @@ function prepBuildings(){
     for(var k=0;k<n*4&&o.units.length<n;k++){
       var ux=o.x0+seeded(id+k*7.1)*(o.x1-o.x0),uy=o.y0+seeded(id+k*3.3)*(o.y1-o.y0),w=8+seeded(id+k)*16,h=8+seeded(id+k*1.7)*14;
       if(pointInPoly(ux,uy,pts)&&pointInPoly(ux+w,uy+h,pts)&&pointInPoly(ux+w,uy,pts)&&pointInPoly(ux,uy+h,pts))
-        o.units.push([ux,uy,w,h,(!o.deck&&seeded(id+k*9)<.07&&(o.deck=1))?'deck':'unit']);
+        o.units.push([ux,uy,w,h,'unit']);
     }
     BLD.push(o);
   });
@@ -531,7 +533,7 @@ function spawnGreenway(){
   v.cross=null;v.crosses=crossAll(path);v.pathSpeed=12*MPH;v.x=q.x;v.y=q.y;v.rot=q.rot;v.v=v.pathSpeed;v.li=0;if(v.runner)v.gated=true;
   vehicles.push(v);return true;
 }
-var gwTimer=2,dwTimer=2,bots=[],robotRolled=false;
+var gwTimer=2,dwTimer=2,bots=[];
 var BOX={};
 function boxKey(y){return 'b'+Math.round(y/260)}
 function boxFree(key,v){var h=BOX[key];if(!h)return true;if(h===v)return true;if(h.dead||vehicles.indexOf(h)<0||h.mode!=='path'){BOX[key]=null;return true}return false}
@@ -542,22 +544,32 @@ function boxCheckRelease(v){
   var out=v.mode!=='path'||v.dead||(v.inBox&&(v.x<RL-70||v.x>RR+70))||(v.merge&&v.s>v.path.len-30)||(v.inBox&&v.boxY!==undefined&&Math.abs(v.y-v.boxY)>110);
   if(out){if(BOX[v.box]===v)BOX[v.box]=null;v.box=null}
 }
+var botT=12;
 function updateBots(dt){
-  var L=cur();
-  if(L.name!=='Belmont'||mode!=='play'){bots=[];return}
-  if(player.y>10500&&player.x<RL&&!bots.length&&!robotRolled){robotRolled=true;if(Math.random()<.5)bots.push({type:'robot',kind:'micro',w:22,h:28,x:172,y:10790,v:4*MPH,rot:0,mode:'bot',t:0,say:0})}
+  if(mode!=='play'){bots=[];return}
+  var mySide=onSidewalk()?sideOf(player.x):null;
+  botT-=dt;
+  if(botT<=0&&mySide&&railAxis()==='v'&&bots.length<2){
+    botT=rnd(25,45);var dir=Math.random()<.7?-1:1;
+    bots.push({type:'robot',kind:'micro',w:22,h:28,side:mySide,x:walkX(mySide)+14,y:player.y+(dir<0?560:-600),dir:dir,v:4*MPH,mode:'bot',t:rnd(0,6),say:0});
+  }
   bots.forEach(function(b){
-    b.t+=dt;
-    var tx=Math.sin(b.t*1.3)>0?138:178;b.x+=(tx-b.x)*Math.min(1,dt*2);
-    if(Math.abs(player.x-b.x)<26&&player.y<b.y&&b.y-player.y<60)b.v=Math.max(2.5*MPH,b.v-30*dt);else b.v=Math.min(4*MPH,b.v+20*dt);
-    b.y-=b.v*dt;b.say=Math.max(0,b.say-dt);
+    b.t+=dt;b.say=Math.max(0,b.say-dt);
+    // at a side street or alley it turns the corner, like everyone else
+    if(!b.turn&&(MOUTHS.some(function(m){return m.s===b.side&&Math.abs(b.y-m.curb[1])<m.hw+24})||nearDrive(b.y,36)))b.turn=b.side==='W'?-1:1;
+    if(b.turn){b.x+=b.turn*b.v*dt;if(Math.abs(b.x-walkX(b.side))>360)b.gone=true;return}
+    var tx=walkX(b.side)+(Math.sin(b.t*1.3)>0?-14:14);b.x+=(tx-b.x)*Math.min(1,dt*2);
+    var ahead=(player.y-b.y)*b.dir;
+    if(Math.abs(player.x-b.x)<26&&ahead>0&&ahead<60)b.v=Math.max(2.5*MPH,b.v-30*dt);else b.v=Math.min(4*MPH,b.v+20*dt);
+    b.y+=b.dir*b.v*dt;
     if(!b.bumped&&Math.abs(player.x-b.x)<b.w/2+PR-2&&Math.abs(player.y-b.y)<b.h/2+PR-2){b.bumped=true;b.say=1.8;bump();if(!reduceMotion)shake=.15}
   });
-  bots=bots.filter(function(b){return b.y>10450});
+  bots=bots.filter(function(b){return !b.gone&&Math.abs(b.y-player.y)<900});
 }
 function drawBots(){
   bots.forEach(function(b){
-    ctx.save();ctx.translate(b.x,b.y);
+    if(!vis(b.y-40,b.y+40))return;
+    ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.turn?b.turn*Math.PI/2:b.dir===1?Math.PI:0);
     ctx.fillStyle='rgba(0,0,0,.25)';rrect(-12,-12,24,30,6);ctx.fill();
     ctx.fillStyle='#f2f2ee';rrect(-11,-14,22,28,6);ctx.fill();ctx.strokeStyle='#15171a';ctx.lineWidth=1.5;ctx.stroke();
     ctx.fillStyle='#15171a';rrect(-7,-12,14,6,3);ctx.fill();
@@ -849,7 +861,7 @@ function checkPlayer(){
 
 /* ================= game flow ================= */
 
-function viewTargetFor(i){return (i===level?player.y:ROUTE[LEVELS[i].w0][1])-VH*.56}
+function viewTargetFor(i){return (i===level?player.y:ROUTE[LEVELS[i].w0][1])-VH*(mode==='title'?.3:.56)}
 function railAt(sv){
   var r=ROUTE,c=ROUTE_C;sv=clamp(sv,0,c[c.length-1]);
   for(var i=0;i<r.length-1;i++)if(sv<=c[i+1]||i===r.length-2){
@@ -936,6 +948,7 @@ function dismissReport(){
   report.classList.remove('show');
   if(lives<=0){mode='over';hud.classList.add('hidden');showEnd(false);return}
   placePlayer(true);mode='play';
+  if(stats&&stats.donut&&!stats.ate)say(player,'I could really use that donut. (Stand still to eat it.)',3.2);
 }
 function goToLevel(i){
   BOX={};
@@ -958,7 +971,7 @@ function finishWalk(){
 }
 function startGame(){
   ensureAudio();
-  lives=3;inv=0;flash=0;impacts=[];transitioning=false;fastest=0;recIndex={};robotRolled=false;bots=[];
+  lives=3;inv=0;flash=0;impacts=[];transitioning=false;fastest=0;recIndex={};bots=[];botT=12;
   report.classList.remove('show');
   goToLevel(0);
   mode='play';overlay.classList.add('hidden');hud.classList.remove('hidden');updateHUD();
@@ -974,16 +987,17 @@ function setPaused(on){
     mode=pausedFrom;overlay.classList.add('hidden');if(mode==='hit')report.classList.add('show');
   }
 }
-function showCard(html){card.innerHTML=html;overlay.classList.remove('hidden')}
+function showCard(html){card.innerHTML=html;overlay.classList.remove('hidden','low')}
 function best(){try{return JSON.parse(localStorage.getItem('xb-best-walk')||'0')}catch(e){return 0}}
 function saveBest(n){try{if(n>best())localStorage.setItem('xb-best-walk',JSON.stringify(n))}catch(e){}}
 function showTitle(){
   var b=best();
   showCard('<div class="plate"><h1>Cross<br>Broadway</h1></div><div class="body">'+
-    '<p>Walk Broadway from Cornelia to Belmont, crossing at the crosswalks. Traffic gets faster the farther you go. The pigeons are on your side.</p>'+
-    '<p class="fine">Hold the left or right side of the screen to walk along the yellow line. When it turns, tap or hold above or below your walker. Stop next to a dog to pet it. Walk over litter to pick it up and toss it at the next garbage can. Arrow keys work too.'+(b?' Your best: '+b+' of '+LEVELS.length+'.':'')+'</p>'+
+    '<p>Walk Broadway from Cornelia to Belmont. Cross at the crosswalks. Get there in one piece.</p>'+
+    '<p class="fine">Hold either side of the screen, or use the arrow keys, to walk the yellow line.'+(b?' Your best: '+b+' of '+LEVELS.length+'.':'')+'</p>'+
     '<div class="actions"><button class="btn" id="startBtn">Start at Cornelia</button><button class="btn ghost" id="tourBtn">See the real crashes</button></div></div>');
   $('startBtn').onclick=startGame;$('tourBtn').onclick=function(){openTour('title')};
+  overlay.classList.add('low');cameraTarget=viewTargetFor(level);cameraY=cameraTarget;
 }
 var lastWon=false;
 function showEnd(won){
@@ -991,7 +1005,7 @@ function showEnd(won){
   var n=won?LEVELS.length:level,st=stats||{};saveBest(n);
   var tiles=[[n+'/'+LEVELS.length,'crossings'],[fastest?fastest+' mph':'–','fastest car',fastest>30],[st.litter||0,'litter tossed'],
     [st.hi||0,'neighbors'],[st.dogs||0,'dogs petted'],[st.close||0,'close calls']];
-  var chips=[];if(st.donut)chips.push('Donut from Stan\'s');if(st.candy)chips.push('Candy from George');if(st.book)chips.push('Library book');if(st.poop)chips.push('Stepped in poop');
+  var chips=[];if(st.ate)chips.push('Ate a donut');else if(st.donut)chips.push('Donut from Stan\'s');if(st.candy)chips.push('Candy from George');if(st.book)chips.push('Library book');if(st.poop)chips.push('Stepped in poop');
   showCard('<div class="plate'+(won?'':' red')+'"><h1>'+(won?'You made it<br>to Belmont.':'Broadway<br>wins.')+'</h1></div><div class="body">'+
     '<div class="stats">'+tiles.map(function(t){return '<div><b'+(t[2]?' class="hot"':'')+'>'+t[0]+'</b><span>'+t[1]+'</span></div>'}).join('')+'</div>'+
     (chips.length?'<div class="chips">'+chips.map(function(c){return '<span>'+c+'</span>'}).join('')+'</div>':'')+
@@ -1137,8 +1151,7 @@ function drawWorld(){
   drawTrees();
   drawMirror();
   taps.forEach(function(t){ctx.beginPath();ctx.arc(t.x,t.y,(1-t.t/.35)*14+8,0,Math.PI*2);ctx.strokeStyle='rgba(255,255,255,'+(t.t/.35*.5)+')';ctx.lineWidth=2;ctx.stroke()});
-  BLD.forEach(function(b){if(b.name&&vis(b.y0,b.y1))landmarkLabel(b)});
-  drawOffMarks();
+  if(mode==='title'){BLD.forEach(function(b){if(b.name&&vis(b.y0,b.y1))landmarkLabel(b)});drawOffMarks()}
   drawBubbles();
 }
 
@@ -1301,7 +1314,6 @@ function rider(cx,cy,color,rot,type){
   ctx.restore();
 }
 function drawPlayer(){
-  if(mode==='title')return;
   if(inv>0&&mode==='play'&&Math.floor(inv*12)%2===0)return;
   var sc=1.1,x=player.x,y=player.y;
   ctx.save();ctx.translate(x,y);
@@ -1312,7 +1324,7 @@ function drawPlayer(){
   ctx.fillStyle='#fff';rrect(-10,-8,20,15,6);ctx.fill();
   ctx.fillStyle='#ffd23f';rrect(-8.5,-6.5,17,12,5);ctx.fill();
   ctx.fillStyle='#3b2a20';ctx.beginPath();ctx.arc(0,0,5.6,0,Math.PI*2);ctx.fill();
-  if(stats&&stats.donut){ctx.strokeStyle='#e86ea0';ctx.lineWidth=2.6;ctx.beginPath();ctx.arc(12,-3,3,0,Math.PI*2);ctx.stroke()}
+  if(stats&&stats.donut&&!stats.ate){ctx.strokeStyle='#e86ea0';ctx.lineWidth=2.6;ctx.beginPath();ctx.arc(12,-3,3,0,Math.PI*2);ctx.stroke()}
   if(stats&&stats.carry){ctx.fillStyle='#f4f1ea';ctx.beginPath();ctx.arc(11,3,2.6,0,Math.PI*2);ctx.fill()}
   if(stats&&stats.book){rect(-16,-6,6,8,'#2f6fa8');rect(-15,-5,1,6,'#f1e7c9')}
   ctx.restore();
@@ -1379,7 +1391,7 @@ function drawHint(){
   ctx.beginPath();ctx.moveTo(-5,-8);ctx.lineTo(4,0);ctx.lineTo(-5,8);ctx.stroke();ctx.restore();
 }
 function drawGuide(){
-  if(mode!=='play')return;
+  if(mode!=='play'&&mode!=='title')return;
   var r=ROUTE,pts=[[player.x,player.y]].concat(r.slice(wp,wp+4));
   if(pts.length<2)return;
   ctx.save();ctx.setLineDash([10,9]);ctx.lineDashOffset=-worldTime*30;ctx.lineCap='round';
@@ -1458,7 +1470,7 @@ var CANS=[['E',2620],['W',3150],['W',4470],['E',5800],['W',6400],['W',7020],['W'
 var LITTER_KINDS=['cup','can','wrapper','bag'];
 var POOP_SPOTS=[['E',2600],['W',3620],['W',4400],['E',5420],['W',7050],['W',8000],['W',9200],['W',10100]];
 var SHOPS=[
-  {id:'donut',side:'W',y:7290,label:'STAN\'S',col:'#e86ea0',ask:'Fresh donuts! Stop in?',got:'One glazed, please.'},
+  {id:'donut',side:'W',y:7290,label:'STAN\'S',col:'#e86ea0',ask:'Fresh donuts! Stop in?',got:'One glazed. Saving it for later.'},
   {id:'book',side:'W',y:7800,label:'FREE LIBRARY',col:'#3f7d4f',ask:'Little Free Library: take a book?',got:'Took a book. Left one too.'}
 ];
 var HELLOS=['Hi!','Morning!','Hey.','Nice day for it.','Careful out there.','Love your jacket.','Go Cubs.','Hi, neighbor.','Watch that alley.',
@@ -1516,6 +1528,7 @@ function updateLife(dt){
   if(stats.carry)CANS.forEach(function(c){
     if(near(c.x,c.y,40)){stats.litter+=stats.carry;pops.push({x:c.x,y:c.y-16,t:1.2,text:'+'+stats.carry});stats.carry=0;chime()}
   });
+  if(stats.donut&&!stats.ate&&lives<3&&idleT>1.2){stats.ate=true;lives++;updateHUD();chime();pops.push({x:player.x,y:player.y-16,t:1.6,heart:true});say(player,'Mmm. Much better.',2)}
   POOP.forEach(function(q){
     if(!q.stepped&&Math.abs(player.x-q.x)<10&&Math.abs(player.y-q.y)<9){q.stepped=true;stats.poop++;squelch();player.poopT=7;say(player,pick(['Ugh.','Seriously?','Not again.']),1.6)}
   });
