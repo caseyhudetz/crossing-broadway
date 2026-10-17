@@ -84,6 +84,14 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .btn.ghost{background:transparent}
 .btn:active{transform:translateY(2px);box-shadow:0 1px 0 #111}
 .actions{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:2px 0 10px}
+.stats div{background:#ebe4d3;border-radius:8px;padding:9px 4px 7px;text-align:center}
+.stats b{display:block;font-size:22px;font-weight:900;line-height:1.05}
+.stats b.hot{color:var(--red)}
+.stats span{font-size:11px;font-weight:800;color:#6b6a64}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+.chips span{font-size:12px;font-weight:800;border:1.5px solid #15171a;border-radius:999px;padding:3px 9px 1px}
+.body .fact{font-size:13px;color:#44433f}
 </style>
 </head>
 <body>
@@ -134,6 +142,7 @@ var LEVELS=[
   {name:'Cornelia',  cw:1843, ctrl:'signal',off:0,  sb:1605, nb:1865, pts:[[E,1843]]},
   {name:'Across Stratford',data:'Stratford',cw:2756,ctrl:'none', pts:[[E,2690],[E,2830]]},
   {name:'Stratford', cw:2885, ctrl:'none', pts:[[E,2885],[W,2885],[W,3170],[W,3425]]},
+  {name:'Parking Lot',cw:3770,ctrl:'none', pts:[[W,3680],[W,3860]]},
   {name:'Across Roscoe',data:'Roscoe',cw:4608,ctrl:'none', pts:[[W,4535],[W,4720]]},
   {name:'Roscoe',    cw:5325, ctrl:'signal',off:13, sb:5104, nb:5347, cws:[5126,5325], pts:[[W,5126],[E,5126],[E,5275]]},
   {name:'Buckingham',cw:5890, ctrl:'none', pts:[[E,5890],[W,5890]]},
@@ -144,7 +153,9 @@ var LEVELS=[
   {name:'Belmont',   cw:10538,ctrl:'signal',off:25,sb:10248,nb:10560, cws:[10270,10538], pts:[[W,10270],[E,10270],[E,10538],[W,10538],[W,10760]]}
 ];
 // Blind alleys on the west sidewalk. Drivers come out of them without stopping. A neighbor got a mirror put up at the Optima one.
-var DRIVES=[{y:3256,mirror:true,t:2},{y:9550,t:2}],DRIVE_Y=DRIVES[0].y;
+var DRIVES=[{y:3256,mirror:true,t:2,tip:'Tip: the round mirror on the corner shows cars coming before you can see them.'},
+  {y:3770,t:2,tip:'Tip: drivers leaving a lot are looking for a gap in traffic, not for you.'},
+  {y:9550,t:2,tip:'Tip: watch for headlights in the alley before you step out.'}],DRIVE_Y=DRIVES[0].y;
 function nearDrive(y,pad){return DRIVES.some(function(d){return Math.abs(y-d.y)<pad})}
 var ROUTE=[[W,1843]];
 LEVELS.forEach(function(L){L.w0=ROUTE.length-1;ROUTE=ROUTE.concat(L.pts);L.w1=ROUTE.length-1;if(!L.cws)L.cws=[L.cw]});
@@ -180,6 +191,7 @@ var RECORDS={
   Buckingham:[['Aug 28, 2020, 12:40 PM','A driver turning left hit a pedestrian crossing at the intersection.'],['Nov 1, 2025, 7:01 PM','A driver who failed to yield hit a cyclist.']],
   Aldine:[['Nov 14, 2025, 8:18 AM','A southbound driver hit a pedestrian in the crosswalk.'],['Aug 19, 2023, 12:14 PM','A driver who failed to yield hit a pedestrian in the crosswalk.'],['May 10, 2025, 10:18 AM','A southbound driver hit a pedestrian in the crosswalk, then drove off.']],
   Melrose:[['Jun 21, 2023, 11:05 AM','A truck backing up hit a pedestrian.'],['Apr 28, 2026, 11:30 AM','A driver pulling over to park hit a cyclist.']],
+  'Parking Lot':[['Dec 27, 2025, 12:37 PM','A turning driver crashed at the lot exit. No one was hurt.'],['Mar 28, 2019, 7:15 PM','Two cars collided here. No one was hurt.']],
   'Blind Alley':[['Sep 29, 2019, 6:55 PM','A distracted driver hit a cyclist where this alley meets Broadway. The cyclist was injured.'],['Feb 15, 2019, 9:37 PM','A turning driver crashed here. Someone may have been hurt.']],
   Belmont:[['Jan 8, 2023, 1:15 AM','A driver hit a pedestrian in the crosswalk, then drove off.'],['Jun 14, 2023, 7:52 PM','A northbound driver hit a pedestrian, then drove off.']]
 };
@@ -290,7 +302,7 @@ function drawCrashDots(){
     });
   }
 }
-var COUNTS={Cornelia:[1,4],Stratford:[2,2],Roscoe:[3,4],Buckingham:[1,1],Aldine:[3,3],Melrose:[1,3],'Blind Alley':[0,1],Belmont:[2,3]};
+var COUNTS={Cornelia:[1,4],Stratford:[2,2],Roscoe:[3,4],Buckingham:[1,1],Aldine:[3,3],Melrose:[1,3],'Parking Lot':[0,0],'Blind Alley':[0,1],Belmont:[2,3]};
 
 var TYPES={
   robot:{w:22,h:28,label:'a delivery robot'},
@@ -312,7 +324,7 @@ var mode='title',level=0,lives=3,transitioning=false;
 var worldTime=0,shake=0,flash=0,inv=0,cameraY=0,cameraTarget=0;
 var vehicles=[],parked=[],trees=[],impacts=[],pigeons=[],nextId=1;
 var laneTimers={SB:0,NB:0,SBB:0,NBB:0},mouthTimers={};
-var player={x:START_X,bx:START_X,off:0,offT:0,y:0,dx:0,dy:0,hop:0,face:1};
+var player={x:START_X,bx:START_X,y:0,dx:0,dy:0,hop:0,face:1};
 var muted=false,recIndex={},fastest=0,pausedFrom='play';
 try{muted=localStorage.getItem('xb-muted')==='1'}catch(e){}
 
@@ -408,6 +420,8 @@ function prepBuildings(){
   var tot=pal.reduce(function(a,p){return a+p[1]},0);
   GEO.bld.forEach(function(b){
     var pts=b[0],lv=b[1],kind=b[2],id=b[3],photo=b[4],name=b[5];
+    var west=pts.reduce(function(a,q){return a+q[0]},0)/pts.length<280;
+    pts=pts.map(function(q){return [west?Math.min(q[0],BL):Math.max(q[0],BR),q[1]]});b[0]=pts;
     var xs=pts.map(function(p){return p[0]}),ys=pts.map(function(p){return p[1]});
     var o={pts:pts,lv:Math.min(lv,10),kind:kind,x0:Math.min.apply(0,xs),x1:Math.max.apply(0,xs),y0:Math.min.apply(0,ys),y1:Math.max.apply(0,ys)};
     var r=seeded(id)*tot,acc=0;
@@ -426,11 +440,14 @@ function prepBuildings(){
   });
   BLD.sort(function(a,b){return a.y0-b.y0});
 }
+function sidewalkFolks(y,side){
+  return NEIGHBORS.concat(DOGS,SHOPS).some(function(o){return o.side===side&&Math.abs(o.y-y)<48});
+}
 function makeTrees(){
   trees=[];
   [[150,'W'],[410,'E']].forEach(function(t){
     for(var y=0;y<GEO.H;y+=rnd(100,150)){
-      if(nearAny(y,34)||nearMouth(y,t[1],30)||(t[1]==='W'&&DRIVES.some(function(d){return y>d.y-60&&y<d.y+125})))continue;
+      if(nearAny(y,34)||nearMouth(y,t[1],30)||sidewalkFolks(y,t[1])||(t[1]==='W'&&DRIVES.some(function(d){return y>d.y-60&&y<d.y+125})))continue;
       trees.push({x:t[0]+rnd(-3,3),y:y,r:rnd(20,28),s:Math.random(),stump:Math.random()<.22});
     }
   });
@@ -843,7 +860,7 @@ function railAt(sv){
 function placePlayer(checkpoint){
   if(!checkpoint)wp=1;
   player.s=ROUTE_C[Math.max(0,wp-1)];var q=railAt(player.s);
-  player.x=player.bx=q.x;player.off=player.offT=0;player.y=q.y;player.dx=player.dy=0;player.face=1;player.ang=Math.PI/2;player.walk=0;
+  player.x=player.bx=q.x;player.y=q.y;player.dx=player.dy=0;player.face=1;player.ang=Math.PI/2;player.walk=0;
   cameraTarget=player.y-VH*.56;held=null;pend=0;
 }
 // Which way along the line does this input push you? +1 forward, -1 back, 0 neither.
@@ -866,18 +883,15 @@ function railAxis(){
 }
 function walkUpdate(dt){
   if(mode!=='play'||transitioning)return;
-  // stepping to one side of the sidewalk, only on the stretches that run north-south
-  var axisV=railAxis()==='v';if(!axisV)player.offT=0;
-  player.off+=clamp(player.offT-player.off,-90*dt,90*dt);player.x=player.bx+player.off;
   var u=held||(keysDown.length?keysDown[keysDown.length-1]:null),d=0;
   if(u)d=95*dt;else if(pend>0&&pendDir){u=pendDir;d=Math.min(pend,95*dt);pend-=d}
   if(!u||!d){idleT+=dt;return}
   idleT=0;
-  var sg=railSign(u);if(!sg){if(axisV&&u[0]&&!u[1])player.offT=u[0]*SIDE;pend=0;return}
+  var sg=railSign(u);if(!sg){pend=0;return}
   var r=ROUTE,c=ROUTE_C,minS=c[Math.max(0,wp-1)];
   var ns=clamp(player.s+sg*d,minS,c[c.length-1]),q=railAt(ns),mx=q.x-player.bx,my=q.y-player.y;
   if(Math.abs(mx)+Math.abs(my)<.01)return;
-  player.s=ns;player.bx=q.x;player.x=q.x+player.off;player.y=q.y;player.ang=Math.atan2(mx,-my);player.walk+=Math.hypot(mx,my);
+  player.s=ns;player.bx=player.x=q.x;player.y=q.y;player.ang=Math.atan2(mx,-my);player.walk+=Math.hypot(mx,my);
   stepAcc+=Math.hypot(mx,my);if(stepAcc>22){stepAcc=0;tick()}
   cameraTarget=player.y-VH*.56;
   while(wp<r.length&&player.s>=c[wp]-3){
@@ -912,7 +926,7 @@ function crash(v){
   var c=COUNTS[dk];
   $('rTitle').textContent='Hit by '+what;$('rSub').textContent=sub;
   $('rWhen').textContent='It happened here, '+r[0];$('rText').textContent=r[1];
-  $('rCount').textContent=v.driveway?(v.drive.mirror?'Tip: the round mirror on the corner shows cars coming before you can see them.':'Tip: watch for headlights in the alley before you step out.'):dk+' since 2019: '+plural(c[0],'pedestrian')+' and '+plural(c[1],'cyclist')+' hit.';
+  $('rCount').textContent=v.driveway?v.drive.tip:dk+' since 2019: '+plural(c[0],'pedestrian')+' and '+plural(c[1],'cyclist')+' hit.';
   $('rBtn').textContent=lives===2?'Walk it off':lives===1?'One more try':'See how you did';
   mode='hit';
   setTimeout(function(){if(mode==='hit'){report.classList.add('show');$('rBtn').focus()}},380);
@@ -967,19 +981,23 @@ function showTitle(){
   var b=best();
   showCard('<div class="plate"><h1>Cross<br>Broadway</h1></div><div class="body">'+
     '<p>Walk Broadway from Cornelia to Belmont, crossing at the crosswalks. Traffic gets faster the farther you go. The pigeons are on your side.</p>'+
-    '<p class="fine">Hold the left or right side of the screen to walk along the yellow line. When it turns, tap or hold above or below your walker. Swipe sideways to step around things, and stop next to a dog to pet it. Arrow keys work too.'+(b?' Your best: '+b+' of '+LEVELS.length+'.':'')+'</p>'+
+    '<p class="fine">Hold the left or right side of the screen to walk along the yellow line. When it turns, tap or hold above or below your walker. Stop next to a dog to pet it. Arrow keys work too.'+(b?' Your best: '+b+' of '+LEVELS.length+'.':'')+'</p>'+
     '<div class="actions"><button class="btn" id="startBtn">Start at Cornelia</button><button class="btn ghost" id="tourBtn">See the real crashes</button></div></div>');
   $('startBtn').onclick=startGame;$('tourBtn').onclick=function(){openTour('title')};
 }
 var lastWon=false;
 function showEnd(won){
   lastWon=won;
-  var n=won?LEVELS.length:level;saveBest(n);
+  var n=won?LEVELS.length:level,st=stats||{};saveBest(n);
+  var tiles=[[n+'/'+LEVELS.length,'crossings'],[fastest?fastest+' mph':'–','fastest car',fastest>30],[st.hi||0,'neighbors'],
+    [st.dogs||0,'dogs petted'],[st.waves||0,'drivers waved'],[st.close||0,'close calls']];
+  var chips=[];if(st.donut)chips.push('Donut from Stan\'s');if(st.candy)chips.push('Candy from George');if(st.book)chips.push('Library book');if(st.poop)chips.push('Stepped in poop');
   showCard('<div class="plate'+(won?'':' red')+'"><h1>'+(won?'You made it<br>to Belmont.':'Broadway<br>wins.')+'</h1></div><div class="body">'+
-    '<p><strong>'+(won?'All '+LEVELS.length+' crossings.':'You made '+n+' of '+LEVELS.length+' crossings.')+'</strong>'+(fastest?' The fastest car that passed you was going '+fastest+' mph. The limit is 30.':'')+'</p>'+
-    lifeSummary()+(won?'<p>Walgreens is right there if you need to sit down.</p>':'<p>Broadway usually wins. That is the point.</p>')+'<p>Since 2019, 13 pedestrians and 22 cyclists have been hit on this stretch of Broadway.</p>'+
+    '<div class="stats">'+tiles.map(function(t){return '<div><b'+(t[2]?' class="hot"':'')+'>'+t[0]+'</b><span>'+t[1]+'</span></div>'}).join('')+'</div>'+
+    (chips.length?'<div class="chips">'+chips.map(function(c){return '<span>'+c+'</span>'}).join('')+'</div>':'')+
+    '<p class="fact">13 pedestrians and 22 cyclists hit on this stretch since 2019. The limit is 30.</p>'+
     '<div class="actions"><button class="btn" id="tourBtn">See where people were hit</button><button class="btn ghost" id="againBtn">Play again</button></div>'+
-    '<p class="fine">Crashes: City of Chicago Traffic Crashes data. Map: OpenStreetMap. Speed and risk: AAA Foundation for Traffic Safety.</p></div>');
+    '<p class="fine">Crashes: City of Chicago. Map: OpenStreetMap. Risk: AAA Foundation.</p></div>');
   $('againBtn').onclick=startGame;$('tourBtn').onclick=function(){openTour('end')};$('tourBtn').focus();
 }
 
@@ -1115,7 +1133,7 @@ function drawWorld(){
   drawImpacts();
   drawTraffic();
   drawControls();
-  drawPigeons();drawGuide();drawLife();drawSigns();drawGuard();drawBots();drawPlayer();drawHint();
+  drawTrees(true);drawPigeons();drawGuide();drawLife();drawSigns();drawGuard();drawBots();drawPlayer();drawHint();
   drawTrees();
   drawMirror();
   taps.forEach(function(t){ctx.beginPath();ctx.arc(t.x,t.y,(1-t.t/.35)*14+8,0,Math.PI*2);ctx.strokeStyle='rgba(255,255,255,'+(t.t/.35*.5)+')';ctx.lineWidth=2;ctx.stroke()});
@@ -1151,7 +1169,8 @@ function mouthOf(n,sd){return MOUTHS.filter(function(m){return m.n===n&&m.s===sd
 function drawBikeLane(){
   var B=BIKELANE;if(!vis(B.y0-700,B.y1+700))return;
   ['W','E'].forEach(function(sd){var m=mouthOf('Roscoe',sd);if(!m)return;stroke(m.p.map(function(q){return [q[0],q[1]+41]}),20,'#3f8a5a')});
-  var E=mouthOf('Roscoe','E'),ye=E?E.curb[1]+41:B.y1;
+  var E=mouthOf('Roscoe','E'),ye=E?E.curb[1]+41:B.y1,Wm=mouthOf('Roscoe','W'),yw=Wm?Wm.curb[1]+41:B.y0;
+  rect(RL-2,yw-10,B.x1-RL+2,B.y0-yw+12,'#3f8a5a');   // the turn from the greenway into the lane
   rect(B.x0,ye-11,RR-B.x0,22,'#3f8a5a');
   rect(B.x0,B.y0,B.x1-B.x0,ye+11-B.y0,'#3f8a5a');
   rect(B.x1,B.y0,3,(E?E.curb[1]+30:B.y1)-B.y0,'rgba(246,246,240,.85)');
@@ -1220,9 +1239,9 @@ function findSchool(){
 }
 
 function drawParked(){parked.forEach(function(p){if(vis(p.y-50,p.y+50))car(p.x,p.y,p.w,p.h,p.color,p.van?'delivery':'car',p.side==='W'?Math.PI:0,false,null,true)})}
-function drawTrees(){
+function drawTrees(stumps){
   trees.forEach(function(t){
-    if(!vis(t.y-t.r,t.y+t.r))return;
+    if(!vis(t.y-t.r,t.y+t.r)||t.stump!==!!stumps)return;
     if(t.stump){
       // cut down, never replaced: a tree pit and a stump
       rect(t.x-14,t.y-14,28,28,'#6e5d48');rect(t.x-14,t.y-14,28,3,'rgba(0,0,0,.18)');
@@ -1416,14 +1435,13 @@ function radarSign(x,y,v){
 /* ================= sidewalk life ================= */
 // Neighbors, dogs and the odd mess on the sidewalk. None of it can hurt you.
 // Stop next to a dog to pet it, or next to a neighbor to chat. Step left or right to get around things.
-var SIDE=15;
-var stats,bubbles=[],pops=[],prints=[],walkers=[],walkerT=3;
+var stats,POOP=[],bubbles=[],pops=[],prints=[],walkers=[],walkerT=3;
 function walkX(side){return side==='W'?W:E}
-function shopX(side){return side==='W'?W-28:E+28}   // the building side of the walking line
+function shopX(side){return side==='W'?W-18:E+22}   // between the walking line and the building line
 function sideOf(x){return x<280?'W':'E'}
 var NEIGHBORS=[
   {name:'Devon',side:'E',y:2470,coat:'#f4f1ea',menu:true,hi:'Hi! Table for one?',chat:'Careful at Stratford. Drivers pull out without looking.'},
-  {name:'George',side:'W',y:4180,coat:'#7a5a3c',hi:'Hey there, neighbor.',chat:'That alley back there? Nobody looks. Glad you made it.'}
+  {name:'George',side:'W',y:4180,coat:'#f4f4f0',barber:true,hi:'Hey neighbor! Want a candy?',chat:'Take two. And come by for a trim, you\'re getting shaggy.',gives:'candy'}
 ];
 var DOGS=[
   {side:'E',y:2150,col:'#c98b4a',coat:'#3d6b8c',line:'That\'s Pickles. She likes you.'},
@@ -1433,19 +1451,27 @@ var DOGS=[
   {side:'W',y:8250,col:'#5b5b5b',coat:'#a0522d',line:'This is Sox. Don\'t tell him we\'re by Wrigley.'},
   {side:'W',y:9950,col:'#d8b26e',coat:'#2f4f4f',line:'Waffles just ate. Waffles always just ate.'}
 ];
-var POOP=[['E',2600],['W',3620],['W',4400],['E',5420],['W',7050],['W',8000],['W',9200],['W',10100]];
+var POOP_SPOTS=[['E',2600],['W',3620],['W',4400],['E',5420],['W',7050],['W',8000],['W',9200],['W',10100]];
 var SHOPS=[
   {id:'donut',side:'W',y:7290,label:'STAN\'S',col:'#e86ea0',ask:'Fresh donuts! Stop in?',got:'One glazed, please.'},
   {id:'book',side:'W',y:7800,label:'FREE LIBRARY',col:'#3f7d4f',ask:'Little Free Library: take a book?',got:'Took a book. Left one too.'}
 ];
-var HELLOS=['Hi!','Morning!','Hey.','Nice day for it.','Careful out there.','Love your jacket.','Go Cubs.','Hi, neighbor.'];
+var HELLOS=['Hi!','Morning!','Hey.','Nice day for it.','Careful out there.','Love your jacket.','Go Cubs.','Hi, neighbor.','Watch that alley.',
+  'Is it me or is everyone driving faster?','You dropped something. Kidding.','Have you seen a gray cat?','They should put a light here.'];
+var CONVOS=[['Did you try the new Thai place?','Which one? There are four.'],['Cubs lost again.','It\'s a lifestyle.'],['My rent went up again.','Mine too. Optima has a pool though.'],
+  ['Is it going to rain?','It\'s Chicago. Wait ten minutes.'],['Somebody took my Divvy.','Somebody always takes the Divvy.'],['Brunch at Ann Sather?','Only if we get the cinnamon rolls.'],
+  ['That car almost hit me yesterday.','Which one?'],['Are we lost?','We\'re on Broadway. You can\'t get lost on Broadway.']];
+var MEAN=['Hey, get outta here!','Move it!','Come ON!','Watch where you\'re going!','Unbelievable.'];
+var ARGUE={bike:[['Get in the bike lane!','This IS the bike lane!'],['You almost hit me!','You came out of nowhere!'],['Share the road, buddy!','I am sharing it!']],
+  car:[['Come ON, move!','Relax, it\'s Broadway!'],['Use your blinker!','Use your eyes!'],['It\'s green!','I see it!']]};
+var argueT=8;
 var COATS=['#6a8caf','#b5651d','#4b6b4b','#8e5572','#3a3a3a','#c2a878','#a33b3b','#5a6e8c'];
 function resetLife(){
-  stats={dogs:0,hi:0,poop:0,donut:false,book:false,waves:0,close:0};
+  stats={dogs:0,hi:0,poop:0,donut:false,book:false,candy:false,waves:0,close:0};
   bubbles=[];pops=[];prints=[];walkers=[];walkerT=3;player.poopT=0;
   NEIGHBORS.forEach(function(n){n.x=shopX(n.side);n.greeted=n.chatted=false});
-  DOGS.forEach(function(d){d.ox=shopX(d.side);d.oy=d.y;d.x=d.ox+(d.side==='W'?14:-14);d.dy=d.y+10;d.petted=false;d.wag=0});
-  POOP=POOP.map(function(q){return {side:q.side||q[0],y:q.y||q[1],x:walkX(q.side||q[0]),stepped:false}});
+  DOGS.forEach(function(d){d.ox=shopX(d.side);d.oy=d.y;d.x=d.ox+(d.side==='W'?9:-9);d.dy=d.y+16;d.petted=false;d.wag=0});
+  POOP=POOP_SPOTS.filter(function(){return Math.random()<.45}).map(function(q){return {side:q[0],y:q[1],x:walkX(q[0]),stepped:false}});
   SHOPS.forEach(function(sh){sh.x=shopX(sh.side)-4;sh.asked=false});
   GUARDS.forEach(function(g){g.greeted=false});
   SIGNS.forEach(function(g){g.popT=undefined});
@@ -1460,7 +1486,7 @@ function updateLife(dt){
   prints.forEach(function(q){q.t-=dt});prints=prints.filter(function(q){return q.t>0});
   NEIGHBORS.forEach(function(n){
     if(!n.greeted&&mySide===n.side&&Math.abs(player.y-n.y)<70){n.greeted=true;stats.hi++;say(player,'Hi '+n.name+'!',1.6);say(n,n.hi,2.6,.8)}
-    if(n.greeted&&!n.chatted&&still&&near(n.x,n.y,64)){n.chatted=true;say(n,n.chat,3.6)}
+    if(n.greeted&&!n.chatted&&still&&near(n.x,n.y,64)){n.chatted=true;say(n,n.chat,3.6);if(n.gives){stats[n.gives]=true;chime()}}
   });
   DOGS.forEach(function(d){
     d.wag+=dt*(near(d.x,d.dy,90)?16:5);
@@ -1471,20 +1497,23 @@ function updateLife(dt){
     if(!stats[sh.id]&&still&&near(sh.x,sh.y,64)){stats[sh.id]=true;chime();say(player,sh.got,2.2)}
   });
   POOP.forEach(function(q){
-    if(!q.stepped&&Math.abs(player.x-q.x)<8&&Math.abs(player.y-q.y)<9){q.stepped=true;stats.poop++;squelch();player.poopT=7;say(player,pick(['Ugh.','Seriously?','Not again.']),1.6)}
+    if(!q.stepped&&Math.abs(player.x-q.x)<10&&Math.abs(player.y-q.y)<9){q.stepped=true;stats.poop++;squelch();player.poopT=7;say(player,pick(['Ugh.','Seriously?','Not again.']),1.6)}
   });
   if(player.poopT>0){player.poopT-=dt;if(player.walk-(player.lastPrint||0)>16){player.lastPrint=player.walk;prints.push({x:player.x+(prints.length%2?4:-4),y:player.y,a:player.ang,t:4})}}
   // people out for a walk, coming the other way or getting passed
   walkerT-=dt;
   if(walkerT<=0&&mySide&&railAxis()==='v'){
     walkerT=rnd(4,8);var north=Math.random()<.7,wy=player.y+(north?560:-600);
-    walkers.push({side:mySide,x:walkX(mySide)+(Math.random()<.5?-1:1)*14,y:wy,dir:north?-1:1,v:rnd(45,62),coat:pick(COATS),dog:Math.random()<.3?pick(['#c98b4a','#2b2b2b','#ece4d2','#8a6a4a']):null,greeted:false,step:0,petted:false});
+    var lane=(Math.random()<.5?-1:1)*14,sp=rnd(45,62),a={side:mySide,x:walkX(mySide)+lane,y:wy,dir:north?-1:1,v:sp,coat:pick(COATS),dog:Math.random()<.3?pick(['#c98b4a','#2b2b2b','#ece4d2','#8a6a4a']):null,greeted:false,step:0,petted:false};
+    walkers.push(a);
+    if(!a.dog&&Math.random()<.4){var b={side:mySide,x:a.x,y:wy-a.dir*30,dir:a.dir,v:sp,coat:pick(COATS),greeted:true,step:1.5,petted:false};a.pal=b;a.convo=pick(CONVOS);walkers.push(b)}
   }
   walkers.forEach(function(w){
     w.y+=w.dir*w.v*dt;w.step+=dt*7;
-    var dy=w.y-player.y,lx=walkX(w.side)+(player.x>walkX(w.side)?-16:16);
-    if(Math.abs(dy)<90)w.x+=(lx-w.x)*Math.min(1,dt*4);   // make room
-    if(!w.greeted&&mySide===w.side&&Math.abs(dy)<40){w.greeted=true;stats.hi++;say(w,pick(HELLOS),1.8)}
+    var dy=w.y-player.y,lx=walkX(w.side)+(w.x<walkX(w.side)?-19:19);
+    if(Math.abs(dy)<110)w.x+=(lx-w.x)*Math.min(1,dt*5);   // they step around you
+    if(w.convo&&!w.talked&&Math.abs(dy)<300){w.talked=true;say(w,w.convo[0],2.4);if(w.pal)say(w.pal,w.convo[1],2.6,2)}
+    if(!w.greeted&&!w.convo&&mySide===w.side&&Math.abs(dy)<40){w.greeted=true;stats.hi++;say(w,pick(HELLOS),1.8)}
     if(w.dog&&!w.petted&&still&&near(w.x,w.y-w.dir*22,40)){w.petted=true;stats.dogs++;pops.push({x:w.x,y:w.y-w.dir*22-12,t:1.4,heart:true})}
     // they head inside before a side street or crosswalk
     if(MOUTHS.some(function(m){return m.s===w.side&&Math.abs(w.y-m.curb[1])<m.hw+30})||nearDrive(w.y,50)||ROUTE_CWS.some(function(c){return Math.abs(w.y-c)<40}))w.gone=true;
@@ -1498,10 +1527,27 @@ function updateLife(dt){
       var fx=Math.sin(v.rot),fy=-Math.cos(v.rot),dx=player.x-v.x,dy=player.y-v.y,al=dx*fx+dy*fy,lat=Math.abs(-dx*fy+dy*fx);
       if(al>v.h/2-6&&al<v.h/2+170&&lat<v.w/2+30){v.waved=true;stats.waves++;say(v,pick(['Go ahead!','After you!',"Go on, you're fine."]),1.8)}
     }
+    if(!v.yelled&&!v.yielder){
+      var fx2=Math.sin(v.rot),fy2=-Math.cos(v.rot),dx2=player.x-v.x,dy2=player.y-v.y,al2=dx2*fx2+dy2*fy2;
+      if(al2>v.h/2&&al2<v.h/2+160&&Math.abs(-dx2*fy2+dy2*fx2)<v.w/2+30){v.yelled=true;if(Math.random()<.5){say(v,pick(MEAN),1.8);horn(v,'single')}}
+    }
     if(!v.close&&inv<=0&&v.v>8*MPH&&localHit(v,player.x,player.y,PR+14,PR+14)&&!localHit(v,player.x,player.y,PR-2,PR-2)){
       v.close=true;stats.close++;say(player,pick(['Whoa!','Hey!','Yikes.']),1.4);if(!reduceMotion)shake=Math.max(shake,.12);
     }
   });
+  argueT-=dt;
+  if(argueT<=0){
+    argueT=rnd(10,18);
+    var cars=vehicles.filter(function(v){return v.mode==='lane'&&v.kind==='car'&&Math.abs(v.y-player.y)<360});
+    for(var ci=0;ci<cars.length;ci++){
+      var a=cars[ci],dir=LANE[a.lane].dir;
+      var bike=vehicles.filter(function(o){return o.kind==='micro'&&o.mode==='lane'&&LANE[o.lane].dir===dir&&Math.abs(o.y-a.y)<110})[0];
+      var front=vehicles.filter(function(o){return o!==a&&o.mode==='lane'&&o.lane===a.lane&&(o.y-a.y)*dir>0&&(o.y-a.y)*dir<130})[0];
+      var pair=bike?['bike',bike]:front?['car',front]:null;if(!pair)continue;
+      var lines=pick(ARGUE[pair[0]]);say(a,lines[0],2.2);say(pair[1],lines[1],2.4,1.1);if(pair[0]==='car')horn(a,'double');
+      break;
+    }
+  }
   // crossing guards say hi when they step out
   var g=guardAt();if(g&&!g.greeted){g.greeted=true;stats.hi++;say(g,pick(['Go ahead, I\'ve got you.','Walk, don\'t run.','Morning! Go on.']),2.4)}
 }
@@ -1543,6 +1589,9 @@ function drawLife(){
     if(n.x===undefined||!vis(n.y-40,n.y+40))return;
     var face=Math.atan2(player.x-n.x,-(player.y-n.y));
     person(n.x,n.y,n.coat,Math.abs(player.y-n.y)<160?face:(n.side==='W'?Math.PI/2:-Math.PI/2),0,1.1);
+    if(n.barber){var bx=BL+3,by=n.y-22;rect(bx-3,by-11,6,22,'#fff');ctx.save();ctx.beginPath();ctx.rect(bx-3,by-11,6,22);ctx.clip();
+      for(var k=-3;k<6;k++){var o=(worldTime*14+k*7)%42-14;ctx.fillStyle=k%2?'#c8291f':'#2f5fa8';ctx.beginPath();ctx.moveTo(bx-3,by+o);ctx.lineTo(bx+3,by+o-5);ctx.lineTo(bx+3,by+o-2);ctx.lineTo(bx-3,by+o+3);ctx.fill()}
+      ctx.restore();ctx.strokeStyle='#15171a';ctx.lineWidth=1;ctx.strokeRect(bx-3,by-11,6,22)}
     if(n.menu){ctx.save();ctx.translate(n.x,n.y);ctx.rotate(face);rect(7,-6,6,9,'#15171a');ctx.restore()}
     if(Math.abs(player.y-n.y)<220)text(n.name,n.x,n.y+17,9,'#15171a','center',900);
   });
@@ -1591,19 +1640,6 @@ function drawSigns(){
     if(g.n)text(g.n,w/2-6,1,7.5,'#fff','right',800);
     ctx.restore();
   });
-}
-function lifeSummary(){
-  var s=stats||{},parts=[];
-  if(s.dogs)parts.push('petted '+plural(s.dogs,'dog'));
-  if(s.hi)parts.push('said hi to '+plural(s.hi,'neighbor'));
-  if(s.donut)parts.push('got a donut at Stan\'s');
-  if(s.book)parts.push('took a book from the Little Free Library');
-  if(s.waves)parts.push('got waved across by '+plural(s.waves,'driver'));
-  if(s.close)parts.push('had '+plural(s.close,'close call'));
-  if(s.poop)parts.push('stepped in dog poop'+(s.poop===1?'':' '+s.poop+' times'));
-  if(!parts.length)return '<p>You didn\'t stop to pet a single dog.</p>';
-  if(parts.length>1)parts[parts.length-1]='and '+parts[parts.length-1];
-  return '<p>On the way you '+parts.join(parts.length>2?', ':' ')+'.</p>';
 }
 
 /* ================= loop ================= */
