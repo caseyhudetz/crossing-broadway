@@ -1017,9 +1017,10 @@ function showEnd(won){
   var tiles=[[n+'/'+LEVELS.length,'crossings'],[st.pts||0,newBest?'points, new best':'neighbor points'],[fastest?fastest+' mph':'–','fastest car',fastest>30],
     [st.litter||0,'litter tossed'],[(st.dogs||0)+'/4','dogs met'],[st.close||0,'close calls']];
   var chips=[];
-  if(st.cat==='home')chips.push('Smokey is home');if(st.crossed)chips.push('Helped '+plural(st.crossed,'neighbor')+' cross');if(st.groceries===true)chips.push('Carried groceries');
+  if(st.cat==='home')chips.push('Smokey is home');if(st.family)chips.push('Ran into Casey, Jessie, Henry & George');if(st.directions)chips.push('Gave directions to '+plural(st.directions,'visitor'));if(st.market)chips.push('Shopped the farmers market');if(st.crossed)chips.push('Helped '+plural(st.crossed,'neighbor')+' cross');if(st.groceries===true)chips.push('Carried groceries');
   if(st.trees)chips.push('Planted '+plural(st.trees,'tree'));if(st.reports)chips.push('Reported '+plural(st.reports,'problem')+' to 311');if(st.scooters)chips.push('Moved '+plural(st.scooters,'scooter'));
   if(st.book==='new')chips.push('Swapped a book');if(st.bag)chips.push('Handed out a poop bag');if(st.ate)chips.push('Ate a donut');else if(st.donut)chips.push('Donut from Stan\'s');
+  if(st.petition)chips.push('Signed for a safer Broadway');if(st.glove&&st.glove.back)chips.push('Returned a lost glove');if(st.tip)chips.push('Tipped the musician');if(st.lemonade)chips.push('Bought lemonade');if(st.hop)chips.push('Did the hopscotch');if(st.chalk)chips.push('Drew with chalk');if(st.door)chips.push('Held the door');
   if(st.dodged)chips.push('Dodged '+plural(st.dodged,'poop'));if(st.poop)chips.push('Stepped in poop');
   chips=chips.slice(0,6);
   showCard('<div class="plate'+(won?'':' red')+'"><h1>'+(won?'You made it<br>to Belmont.':'Broadway<br>wins.')+'</h1></div><div class="body">'+
@@ -1346,6 +1347,7 @@ function drawPlayer(){
   if(stats&&stats.book){rect(-16,-6,6,8,stats.book==='new'?'#2f6fa8':'#8a8478');rect(-15,-5,1,6,'#f1e7c9')}
   if(stats&&stats.groceries==='carry'){rect(-17,2,6,7,'#b08a5b');rect(11,2,6,7,'#b08a5b')}
   if(stats&&stats.cat==='carry')cat(0,-9,0);
+  if(stats&&stats.glove&&stats.glove.got&&!stats.glove.back)rect(10,-3,5,5,'#a33b3b');
   ctx.restore();
 }
 function drawPigeons(){
@@ -1486,11 +1488,19 @@ var DOG_WALKS=[
 // Litter you pick up by walking over it, and city garbage cans to toss it in as you pass.
 var CANS=[['E',2620],['W',3150],['W',4470],['E',5800],['W',6400],['W',7020],['W',8470],['W',9300],['W',10180]].map(function(c){return {side:c[0],y:c[1]}});
 var LITTER_KINDS=['cup','can','wrapper','bag'];
-var POOP_SPOTS=[['E',2600],['W',3640],['W',4400],['E',5420],['W',7050],['W',8000],['W',9100],['W',10100]];
+var POOP_SPOTS=[['E',2600],['W',3640],['W',4400],['E',5480],['W',7050],['W',7700],['W',9100],['W',10120]];
 // Fixed spots for the things you can help with, so trees and stumps stay clear of them.
 var SPOTS={stans:['W',7290],library:['W',7800],light:['E',2300],pothole:['W',3560],sidewalk:['W',9420],scooter1:['W',6550],scooter2:['W',9700],
-  bag:['W',8150],groceries:['W',8930],door:['W',9200],cat:['E',5600],ruth1:['W',3420],ruth2:['W',6290],delgado:['W',5100],hughes:['E',10520]};
-var PTS={hi:5,litter:10,dodge:5,dog:15,allDogs:50,book:20,tree:25,report:15,walk:10,cat:50,scooter:10,bag:10,donut:10,groceries:25,escort:30};
+  bag:['W',8150],groceries:['W',8930],door:['W',9200],cat:['E',5600],ruth1:['W',3420],ruth2:['W',6290],delgado:['W',5100],hughes:['E',10520],
+  busker:['W',3000],tourist1:['W',4320],petition:['E',5360],lemonade:['W',6850],hopscotch:['W',7920],chalk:['W',7995],market1:['W',8320],market2:['W',8400],market3:['W',8480],
+  tourist2:['W',9960],stroller:['W',10650]};
+// The farmers market on the south side of Nettelhorst, between the school and Melrose
+var MARKET={x0:-230,x1:BL,y0:8285,y1:8600};
+// Our family, out for a walk too
+var FAMILY=[{name:'Henry',coat:'#d9822b',kid:true,line:'Hi! Do you need any help?'},{name:'George',coat:'#3e8e5a',kid:true,line:'We can help you cross!'},
+  {name:'Jessie',coat:'#a14d6b',line:'Have a good walk!'},{name:'Casey',coat:'#2f4f6f',line:'Careful at Aldine. It\'s school time.'}];
+var family=null;
+var PTS={directions:20,family:10,market:10,tip:10,petition:15,lemonade:10,hopscotch:10,chalk:10,door:10,glove:15,hi:5,litter:10,dodge:5,dog:15,allDogs:50,book:20,tree:25,report:15,walk:10,cat:50,scooter:10,bag:10,donut:10,groceries:25,escort:30};
 var HOLD=.7;   // seconds of standing still to help
 var HELLOS=['Hi!','Morning!','Hey.','Nice day for it.','Careful out there.','Love your jacket.','Go Cubs.','Hi, neighbor.','Watch that alley.',
   'Is it me or is everyone driving faster?','You dropped something. Kidding.','They should put a light here.'];
@@ -1553,11 +1563,33 @@ function resetLife(){
   var al=NPC.alvarez;
   deed({kind:'groceries',label:'Carry her groceries',x:al.x,y:al.y,act:function(){follower={npc:al,kind:'groceries'};stats.groceries='carry';say(al,'Bless you. Green door, just up the block.',2.6)}});
   var door=spot('door');door.x=BL+4;
-  deed({kind:'deliver',label:'Drop off the groceries',x:door.x+10,y:door.y,avail:function(){return stats.groceries==='carry'},act:function(){stats.groceries=true;follower=null;al.x=door.x+12;al.y=door.y+8;say(al,'Thank you, sweetheart.',2.2);addPoints(PTS.groceries,door.x,door.y)}});
+  deed({kind:'deliver',label:'Drop off the groceries',x:door.x+10,y:door.y,avail:function(){return stats.groceries==='carry'},act:function(){stats.groceries=true;follower=null;al.x=door.x+12;al.y=door.y+8;say(al,'Thank you, sweetheart.',2.2);addPoints(PTS.groceries,door.x,door.y);al.into={x:BL-14,y:door.y};al.leaveT=-1.6}});
   [NPC.delgado,NPC.hughes].forEach(function(n){
     n.home={x:n.x,y:n.y};
     deed({kind:'escort',label:'Help '+(n===NPC.delgado?'Mr. Delgado':'Mrs. Hughes')+' cross',x:n.x,y:n.y,npc:n,act:function(){follower={npc:n,kind:'escort',from:n.side};say(n,n===NPC.delgado?'Thank you. These drivers don\'t wait.':'Oh, would you? My eyes aren\'t what they were.',2.6)}});
   });
+  // lost visitors who need directions
+  [['tourist1','#e07b39','Excuse me, which way to Wrigley Field?','North on Broadway to Addison, then left. You can\'t miss it.',-1],
+   ['tourist2','#3d8bd9','Is the Belmont L around here?','Keep going to Belmont, then a few blocks west. Red Line.',1]].forEach(function(t){
+    var n=NPC[t[0]]=spot(t[0]);n.coat=t[1];n.ask=t[2];n.map=true;n.dir=t[4];
+    deed({kind:'directions',label:'Give directions',x:n.x,y:n.y,npc:n,act:function(){stats.directions++;say(player,t[3],3);say(n,'Thank you so much!',2,2.6);addPoints(PTS.directions,n.x,n.y);n.leaveT=-2.6}});
+  });
+  var bk=NPC.busker=spot('busker');bk.coat='#5a3e6e';
+  deed({kind:'tip',label:'Tip the musician',x:bk.x,y:bk.y,act:function(){stats.tip=true;say(bk,'Thanks! This one\'s for you.',2.2);addPoints(PTS.tip,bk.x,bk.y);melody()}});
+  var pe=NPC.petition=spot('petition');pe.coat='#2f6f6f';
+  deed({kind:'petition',label:'Sign for a safer Broadway',x:pe.x,y:pe.y,act:function(){stats.petition=true;say(pe,'Thank you! We\'re asking the city for a real crosswalk at Hawthorne.',3.2);addPoints(PTS.petition,pe.x,pe.y)}});
+  var lm=NPC.lemon=spot('lemonade');lm.coat='#e0b13a';lm.kid=true;
+  deed({kind:'lemonade',label:'Buy lemonade',x:lm.x,y:lm.y,act:function(){stats.lemonade=true;say(lm,'Fifty cents! Thank you!!',2);addPoints(PTS.lemonade,lm.x,lm.y)}});
+  var ch=NPC.chalk=spot('chalk');ch.coat='#d94f7a';ch.kid=true;ch.x+=6;
+  deed({kind:'chalk',label:'Draw with chalk',x:ch.x,y:ch.y,act:function(){stats.chalk=true;say(ch,'You drew a sun! Cool.',2);addPoints(PTS.chalk,ch.x,ch.y)}});
+  var sr=NPC.stroller=spot('stroller');sr.coat='#7a6a55';
+  deed({kind:'door',label:'Hold the door',x:sr.x,y:sr.y,act:function(){stats.door=true;say(sr,'Oh, thank you. Wheels and doors, I tell you.',2.4);addPoints(PTS.door,sr.x,sr.y);sr.into={x:BL-14,y:sr.y};sr.leaveT=0}});
+  [['market1','Buy apples','Honeycrisp, picked Tuesday!','#c8291f'],['market2','Buy flowers','Zinnias. They\'ll last a week.','#e86ea0'],['market3','Buy honey','From hives in Lincoln Park!','#e0a21a']].forEach(function(m){
+    var v=NPC[m[0]]=spot(m[0]);v.x=BL-22;v.coat='#4b6b4b';v.goods=m[3];
+    deed({kind:'market',label:m[1],x:BL-4,y:v.y,act:function(){stats.market++;say(v,m[2],2.2);addPoints(PTS.market,v.x,v.y)}});
+  });
+  stats.directions=0;stats.market=0;stats.hop=false;stats.glove=null;
+  family=null;NPC.glover=null;
   var cat=NPC.cat;
   deed({kind:'cat',label:'Pick up the gray cat',x:cat.x,y:cat.y,r:40,avail:function(){return !stats.cat},act:function(){stats.cat='carry';cat.held=true;say(player,NPC.ruth.asked?'Smokey! Let\'s get you home.':'Whose cat are you?',2.2)}});
   deed({kind:'catHome',label:'Give Smokey back',x:0,y:0,avail:function(){return stats.cat==='carry'&&NPC.ruth.moved},act:function(){stats.cat='home';cat.held=false;cat.x=NPC.ruth.x+12;cat.y=NPC.ruth.y+12;say(NPC.ruth,'SMOKEY! Oh, thank you, thank you.',2.6);addPoints(PTS.cat,NPC.ruth.x,NPC.ruth.y)}});
@@ -1586,6 +1618,40 @@ function updateLife(dt){
   // Ruth asks about her cat, then goes looking for it further south
   var ru=NPC.ruth;
   if(!ru.asked&&mySide==='W'&&Math.abs(player.y-ru.y)<80){ru.asked=true;say(ru,stats.cat?'Smokey! You found her! I\'ll meet you by Buckingham.':'Have you seen a gray cat? Smokey. I\'ll keep looking down by Buckingham.',3.4)}
+  ['tourist1','tourist2'].forEach(function(k){var n=NPC[k];if(!n.asked&&mySide==='W'&&Math.abs(player.y-n.y)<130){n.asked=true;say(n,n.ask,3)}});
+  // people heading off after you've helped them: along the sidewalk, or in through a door
+  Object.keys(NPC).forEach(function(k){var n=NPC[k];if(!n||n.leaveT===undefined||n.gone)return;n.leaveT+=dt;if(n.leaveT<0)return;
+    if(n.into){n.x+=(n.into.x-n.x)*Math.min(1,dt*2);n.y+=(n.into.y-n.y)*Math.min(1,dt*2)}else{n.y+=(n.dir||-1)*40*dt;n.x+=(shopX(n.side)-n.x)*Math.min(1,dt*3)}
+    n.step=(n.step||0)+dt*5;if(n.leaveT>3)n.gone=true});
+  // our family, out for a walk between Buckingham and Aldine
+  if(!family&&mySide==='W'&&player.y>6350&&player.y<6900){
+    var fy=Math.min(player.y+520,7440);
+    if(fy-player.y>200)family={y:fy,x:walkX('W')+14,v:42,said:false,step:0};
+  }
+  if(family){
+    var fdy=family.y-player.y;
+    family.y-=family.v*dt;family.step+=dt*6;
+    // two by two, but single file along the far edge as they pass you
+    var tight=Math.abs(fdy)<170;family.k=(family.k||0)+((tight?1:0)-(family.k||0))*Math.min(1,dt*4);
+    family.x+=(walkX('W')+(tight?-21:6)-family.x)*Math.min(1,dt*4);   // building side, clear of the trees
+    if(!family.said&&Math.abs(fdy)<150){family.said=true;stats.family=true;
+      FAMILY.forEach(function(m,i){say(m,m.line,2.4,i*1.5)});addPoints(PTS.family,family.x,family.y)}
+    FAMILY.forEach(function(m,i){var k=family.k;m.x=family.x+(i%2?9:-9)*(1-k);m.y=family.y+(i<2?0:30)*(1-k)+i*32*k});
+    if(family.y<player.y-900)family=null;
+  }
+  // hopscotch outside Nettelhorst: jump on it as you go by
+  var hs=SPOTS.hopscotch[1];
+  if(!stats.hop&&mySide==='W'&&Math.abs(player.y-hs)<36&&airborne()){stats.hop=true;say(player,'Hopscotch!',1.4);addPoints(PTS.hopscotch,player.x,player.y)}
+  // someone drops a glove up ahead: pick it up and catch them
+  if(stats.glove===null&&mySide==='W'&&player.y>9620&&player.y<9700){
+    NPC.glover={side:'W',x:walkX('W')+12,y:player.y+260,coat:'#6a8caf',dir:1,walking:true};stats.glove={x:walkX('W')+4,y:player.y+150,got:false};
+  }
+  var gl=NPC.glover;
+  if(gl&&gl.walking){gl.y+=34*dt;gl.step=(gl.step||0)+dt*5;
+    if(stats.glove&&!stats.glove.got&&near(stats.glove.x,stats.glove.y,16)){stats.glove.got=true;say(player,'Hey! You dropped your glove!',1.8)}
+    if(stats.glove&&stats.glove.got&&!stats.glove.back&&near(gl.x,gl.y,40)){stats.glove.back=true;gl.walking=false;say(gl,'Oh! My glove! Thank you.',2.2);addPoints(PTS.glove,gl.x,gl.y);gl.leaveT=-1.8}
+    if(gl.y>10300)gl.walking=false;
+  }
   if(!ru.moved&&player.y>4300){var r2=spot('ruth2');ru.x=r2.x;ru.y=r2.y;ru.moved=true}
   deeds.forEach(function(d){if(d.kind==='catHome'){d.x=ru.x;d.y=ru.y}});
   // standing still next to something you can help with
@@ -1618,8 +1684,9 @@ function updateLife(dt){
   if(follower){
     var f=follower.npc,bx=-Math.sin(player.ang||0)*22,by=Math.cos(player.ang||0)*22;
     f.x+=(player.x+bx-f.x)*Math.min(1,dt*3);f.y+=(player.y+by-f.y)*Math.min(1,dt*3);f.step=(f.step||0)+dt*5;
-    if(follower.kind==='escort'&&onSidewalk()&&sideOf(player.x)!==follower.from&&sideOf(f.x)!==follower.from){
-      stats.crossed++;say(f,'You\'re a good egg.',2.2);addPoints(PTS.escort,f.x,f.y);f.side=sideOf(f.x);follower=null;
+    // done only once they're all the way across and up on the far sidewalk; then they head off down the block
+    if(follower.kind==='escort'&&onSidewalk()&&sideOf(player.x)!==follower.from&&(f.x<RL-6||f.x>RR+6)&&sideOf(f.x)!==follower.from){
+      stats.crossed++;say(f,'You\'re a good egg.',2.2);addPoints(PTS.escort,f.x,f.y);f.side=sideOf(f.x);f.dir=-1;f.leaveT=-1.5;follower=null;
     }
   }
   // the four dogs: their walkers set out toward you as you come up the block
@@ -1722,8 +1789,48 @@ function cone(x,y){ctx.fillStyle='#ff7a1a';ctx.beginPath();ctx.moveTo(x,y-7);ctx
 function oldPerson(n,ang){person(n.x,n.y,n.coat,ang,n.step||0,PS);if(n.cane){ctx.strokeStyle='#4a3325';ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(n.x+9,n.y-4);ctx.lineTo(n.x+11,n.y+9);ctx.stroke()}
   ctx.fillStyle='#d9d9d4';ctx.beginPath();ctx.arc(n.x,n.y,4,0,Math.PI*2);ctx.fill()}
 function faceSide(side){return side==='W'?Math.PI/2:-Math.PI/2}
+function npcAlpha(n){return n.leaveT>2?Math.max(0,3-n.leaveT):1}
+// a few notes floating up from the musician
+function melody(){if(!AC||muted)return;var t=AC.currentTime;[523,659,784,659,880].forEach(function(f,i){var o=AC.createOscillator(),g=AC.createGain();o.type='triangle';o.frequency.value=f;env(g,t+i*.14,.01,.12,.25);o.connect(g);g.connect(master);o.start(t+i*.14);o.stop(t+i*.14+.4)})}
+function drawMarket(){
+  var M=MARKET;if(!vis(M.y0,M.y1))return;
+  rect(M.x0,M.y0,M.x1-M.x0,M.y1-M.y0,'#d9d4c6');
+  text('FARMERS MARKET',(M.x0+M.x1)/2-30,M.y0+16,11,'#3f7d4f','center',900);
+  var cols=['#c8291f','#2f6fa8','#3f7d4f','#e0a21a','#8e5572'];
+  for(var r=0;r<3;r++)for(var c=0;c<4;c++){
+    var tx=M.x1-34-c*62,ty=M.y0+34+r*80;if(tx-16<M.x0)continue;
+    ctx.fillStyle='rgba(0,0,0,.18)';ctx.fillRect(tx-15,ty-12,32,32);
+    rect(tx-16,ty-16,32,32,'#f6f3ec');for(var k=0;k<4;k++)rect(tx-16+k*8,ty-16,4,32,cols[(r+c)%cols.length]);
+    rect(tx-16,ty+16,32,6,'#8a6a48');[0,1,2].forEach(function(q){ctx.fillStyle=cols[(r*3+c+q)%cols.length];ctx.beginPath();ctx.arc(tx-9+q*9,ty+19,2.6,0,Math.PI*2);ctx.fill()});
+  }
+  for(var i=0;i<7;i++){var px=M.x0+40+seeded(i*3.3)*(M.x1-M.x0-120),py=M.y0+60+seeded(i*7.1)*(M.y1-M.y0-90);person(px,py+Math.sin(worldTime*2+i)*1.5,COATS[i%COATS.length],seeded(i)*6.28,0,PS)}
+}
+function drawPeople(){
+  var all=['ruth','alvarez','tourist1','tourist2','busker','petition','lemon','chalk','stroller','market1','market2','market3','glover'];
+  all.forEach(function(k){var n=NPC[k];if(!n||n.gone||!vis(n.y-50,n.y+50))return;
+    ctx.save();ctx.globalAlpha=npcAlpha(n);
+    var moving=n.leaveT!==undefined&&n.leaveT>=0||n.walking||(follower&&follower.npc===n),ang=follower&&follower.npc===n?player.ang:moving?(n.into?faceSide(n.side)+Math.PI:(n.dir||-1)===1?Math.PI:0):faceSide(n.side);
+    if(k==='petition'){rect(n.x+6,n.y-12,10,24,'#8a6a48');rect(n.x+8,n.y-6,6,8,'#f4f1ea')}
+    if(k==='lemon'){rect(n.x+6,n.y-12,12,24,'#f2d14b');rect(n.x+9,n.y-4,5,7,'#fff8c4');text('LEMONADE',n.x-14,n.y+22,6.5,'#15171a','left',900)}
+    if(k==='busker'){ctx.fillStyle='#3a2a1e';rrect(n.x+8,n.y-10,9,20,3);ctx.fill();ctx.fillStyle='#b23a3a';rrect(n.x+9,n.y-8,7,16,2);ctx.fill();
+      if(!reduceMotion&&Math.abs(player.y-n.y)<260)for(var q=0;q<2;q++){var a=(worldTime*.6+q*.5)%1;ctx.globalAlpha=npcAlpha(n)*(1-a);text('\u266a',n.x+8+q*8,n.y-14-a*26,12,'#5a3e6e','center',900)}ctx.globalAlpha=npcAlpha(n)}
+    if(k==='stroller'&&!(n.leaveT>=0)){ctx.fillStyle='#2b2b2b';rrect(n.x+5,n.y+6,12,16,4);ctx.fill();rect(BL-4,n.y-10,4,20,'#6b4a2b')}
+    if(k==='chalk'&&stats.chalk){ctx.strokeStyle='#ffd23f';ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(n.x+16,n.y+18,5,0,Math.PI*2);ctx.stroke();for(var r2=0;r2<8;r2++){var a2=r2*Math.PI/4;ctx.beginPath();ctx.moveTo(n.x+16+Math.cos(a2)*7,n.y+18+Math.sin(a2)*7);ctx.lineTo(n.x+16+Math.cos(a2)*10,n.y+18+Math.sin(a2)*10);ctx.stroke()}}
+    if(n.goods){rect(n.x+8,n.y-10,10,20,'#8a6a48');ctx.fillStyle=n.goods;for(var g2=0;g2<3;g2++){ctx.beginPath();ctx.arc(n.x+13,n.y-6+g2*6,2.4,0,Math.PI*2);ctx.fill()}}
+    person(n.x,n.y,n.coat,ang,n.step||0,n.kid?PS*.78:PS);
+    if(n.map){ctx.save();ctx.translate(n.x,n.y);ctx.rotate(ang);rect(-7,-14,14,6,'#f4f1ea');rect(-1,-14,1,6,'#c9c4b8');ctx.restore()}
+    ctx.restore();
+  });
+  if(stats&&stats.glove&&!stats.glove.got){var gv=stats.glove;rect(gv.x-3,gv.y-3,6,6,'#a33b3b');rect(gv.x+2,gv.y-4,2,3,'#a33b3b')}
+  if(family)FAMILY.forEach(function(m,i){if(!vis(m.y-40,m.y+40))return;person(m.x,m.y,m.coat,0,family.step+i,m.kid?PS*.75:PS);if(Math.abs(player.y-m.y)<240)text(m.name,m.x,m.y+(m.kid?16:21),8.5,'#15171a','center',900)});
+  // hopscotch chalk on the sidewalk
+  var hy=SPOTS.hopscotch[1];if(vis(hy-50,hy+50)){ctx.strokeStyle='rgba(255,255,255,.85)';ctx.lineWidth=1.4;
+    [[0,-36],[0,-24],[-6,-12],[6,-12],[0,0],[-6,12],[6,12],[0,24]].forEach(function(c,i){ctx.strokeRect(W-6+c[0],hy+c[1]-6,12,12)});
+    text('1',W,hy+24,7,'rgba(255,255,255,.8)','center',900)}
+}
 function drawLife(){
   if(mode==='tour')return;
+  drawMarket();
   prints.forEach(function(q){if(!vis(q.y-10,q.y+10))return;ctx.save();ctx.translate(q.x,q.y);ctx.rotate(q.a||0);ctx.globalAlpha=Math.min(1,q.t/2)*.55;ctx.fillStyle='#5a3b1e';rrect(-2.5,-4,5,8,2.5);ctx.fill();ctx.restore()});
   ctx.globalAlpha=1;
   CANS.forEach(function(c){
@@ -1771,8 +1878,8 @@ function drawLife(){
   });
   if(stats&&stats.cat==='home')cat(NPC.cat.x,NPC.cat.y,0);
   // the people in the stories
-  [NPC.ruth,NPC.alvarez].forEach(function(n){if(n&&vis(n.y-40,n.y+40))person(n.x,n.y,n.coat,follower&&follower.npc===n?player.ang:faceSide(n.side),n.step||0,PS)});
-  [NPC.delgado,NPC.hughes].forEach(function(n){if(n&&vis(n.y-40,n.y+40))oldPerson(n,follower&&follower.npc===n?player.ang:faceSide(n.side))});
+  drawPeople();
+  [NPC.delgado,NPC.hughes].forEach(function(n){if(!n||n.gone||!vis(n.y-40,n.y+40))return;ctx.save();ctx.globalAlpha=npcAlpha(n);oldPerson(n,follower&&follower.npc===n?player.ang:n.leaveT>=0?((n.dir||-1)===1?Math.PI:0):faceSide(n.side));ctx.restore()});
   NEIGHBORS.forEach(function(n){
     if(n.x===undefined||!vis(n.y-40,n.y+40))return;
     var face=Math.atan2(player.x-n.x,-(player.y-n.y));
