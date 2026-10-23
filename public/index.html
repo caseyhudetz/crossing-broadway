@@ -905,7 +905,7 @@ function localHit(v,px,py,padX,padY){
   return Math.abs(lx)<v.w/2+padX&&Math.abs(ly)<v.h/2+padY;
 }
 function blockedAt(x,y){
-  for(var i=0;i<parked.length;i++){var p=parked[i];if(Math.abs(x-p.x)<p.w/2+PR-3&&Math.abs(y-p.y)<p.h/2+PR-3)return true}
+  for(var i=0;i<parked.length;i++){var p=parked[i],hz=p.rot!==undefined,pw=hz?p.h:p.w,ph=hz?p.w:p.h;if(Math.abs(x-p.x)<pw/2+PR-3&&Math.abs(y-p.y)<ph/2+PR-3)return true}
   return false;
 }
 function checkPlayer(){
@@ -1088,7 +1088,7 @@ function showEnd(won){
   var tiles=[[n+'/'+LEVELS.length,'crossings'],[st.pts||0,newBest?'points, new best':'neighbor points'],[fastest?fastest+' mph':'–','fastest car',fastest>30],
     [st.litter||0,'litter tossed'],[(st.dogs||0)+'/4','dogs met'],[st.close||0,'close calls']];
   var chips=[];
-  if(st.secret)chips.push('Took the back way');if(st.raised)chips.push('Crossed on the raised crosswalk');if(st.seekAll)chips.push('Found every kid at Wendt Park');if(st.ball&&st.ball.back)chips.push('Returned the ball');
+  if(st.secret)chips.push('Took the back way');if(st.raised)chips.push('Crossed on the raised crosswalk');if(st.seekAll)chips.push('Found every kid at Wendt Park');if(st.ball&&st.ball.back)chips.push('Returned the ball');if(st.bdogs)chips.push('Met '+st.bdogs+' back-way dog'+(st.bdogs>1?'s':''));if(st.couch)chips.push('Helped with the couch');if(st.pantry)chips.push('Stocked the little free pantry');
   if(st.vader)chips.push('Saw Darth Vader on Broadway');if(st.bikeBus)chips.push('Cheered the bike bus');if(st.popcorn!==undefined)chips.push('Caught '+st.popcorn+' popcorn');if(st.cat==='home')chips.push('Smokey is home');if(st.family)chips.push('Ran into Casey, Jessie, Henry & George');if(st.directions)chips.push('Gave directions to '+plural(st.directions,'visitor'));if(st.market)chips.push('Bought '+plural(st.market,'thing')+' at the market');if(st.crossed)chips.push('Helped '+plural(st.crossed,'neighbor')+' cross');if(st.groceries===true)chips.push('Carried groceries');
   if(st.trees)chips.push('Planted '+plural(st.trees,'tree'));if(st.reports)chips.push('Reported '+plural(st.reports,'problem')+' to 311');if(st.scooters)chips.push('Moved '+plural(st.scooters,'scooter'));
   if(st.book==='new')chips.push('Swapped a book');if(st.bag)chips.push('Handed out a poop bag');if(st.ate)chips.push('Ate a donut');else if(st.donut)chips.push('Donut from Stan\'s');
@@ -1344,7 +1344,7 @@ function findSchool(){
   if(s)SCHOOL={x:Math.max(s.x0+90,s.x1-110),y:(s.y0+s.y1)/2};
 }
 
-function drawParked(){parked.forEach(function(p){if(vis(p.y-50,p.y+50))car(p.x,p.y,p.w,p.h,p.color,p.van?'delivery':'car',p.side==='W'?Math.PI:0,false,null,true)})}
+function drawParked(){parked.forEach(function(p){if(vis(p.y-50,p.y+50))car(p.x,p.y,p.w,p.h,p.color,p.van?'delivery':'car',p.rot!==undefined?p.rot:p.side==='W'?Math.PI:0,false,null,true)})}
 function drawTrees(stumps){
   trees.forEach(function(t){
     if(!vis(t.y-t.r,t.y+t.r)||!!t.stump!==!!stumps)return;
@@ -1641,7 +1641,7 @@ function exploreUpdate(dt){
   if(park){if(player.y<P.y0-8)exitPark();return}
   if(player.x>BL+18){if(popGame){popGame.t=0;updatePopcorn(0)}exitMarket()}
 }
-var PTS={recycle:10,swing:10,slide:5,spring:5,seek:15,seekAll:25,ball:15,raised:10,bikeBus:10,popcorn:2,close:-10,jaywalk:-15,vader:10,directions:20,family:10,market:10,tip:10,petition:15,lemonade:10,hopscotch:10,chalk:10,door:10,glove:15,hi:5,litter:10,dodge:5,dog:15,allDogs:50,book:20,tree:25,report:15,walk:10,cat:50,scooter:10,bag:10,donut:10,groceries:25,escort:30};
+var PTS={mural:10,couch:20,water:10,pantry:15,chain:15,bdog:10,recycle:10,swing:10,slide:5,spring:5,seek:15,seekAll:25,ball:15,raised:10,bikeBus:10,popcorn:2,close:-10,jaywalk:-15,vader:10,directions:20,family:10,market:10,tip:10,petition:15,lemonade:10,hopscotch:10,chalk:10,door:10,glove:15,hi:5,litter:10,dodge:5,dog:15,allDogs:50,book:20,tree:25,report:15,walk:10,cat:50,scooter:10,bag:10,donut:10,groceries:25,escort:30};
 var HOLD=.7;   // seconds of standing still to help
 var HELLOS=['Hi!','Morning!','Hey.','Nice day for it.','Careful out there.','Love your jacket.','Go Cubs.','Hi, neighbor.','Watch that alley.',
   'Is it me or is everyone driving faster?','You dropped something. Kidding.','They should put a light here.'];
@@ -2141,85 +2141,122 @@ function drawSigns(){
 /* ================= the back way: Cornelia, Elaine, the raised crosswalk and Wendt Park ================= */
 // Instead of crossing Broadway at Cornelia, you can head west on Cornelia, walk down Elaine Place,
 // cross Roscoe on the raised crosswalk, stop in at Wendt Park, and come back along Roscoe to Broadway.
-// The map data stops about a block west of Broadway, so Elaine, its houses and the park are laid out here.
+// The map data stops about a block west of Broadway, so this part is laid out by hand from aerial photos:
+// Elaine runs from Cornelia to Roscoe and ends at both; Wendt Park is a narrow lot a few doors east of Elaine.
 function streetNamed(test){return GEO.streets.filter(function(s){return test(s[0])})[0][0]}
 var ROSCOE_PTS=streetNamed(function(p){return Math.abs(p[0][1]-4606)<10}),CORNELIA_PTS=streetNamed(function(p){return Math.abs(p[p.length-1][0]-133)<2});
 function polyY(pts,x){for(var i=1;i<pts.length;i++){var a=pts[i-1],b=pts[i];if((x-a[0])*(x-b[0])<=0){var t=(x-a[0])/((b[0]-a[0])||1);return a[1]+(b[1]-a[1])*t}}return pts[x>pts[0][0]?0:pts.length-1][1]}
 function corY(x){return polyY(CORNELIA_PTS,x)}
 function rosY(x){return polyY(ROSCOE_PTS,x)}
-// Elaine Place runs north-south; with Broadway straightened it leans a little in game space
-function elX(y){return -2330+(y-1840)*(-150/2820)}
+// Elaine Place, from its T at Cornelia to its T at Roscoe. Broadway runs at an angle in real life, so Elaine
+// sits farther from Broadway at Roscoe than at Cornelia.
+var EL_C=corY(-1760),EL_R=rosY(-2300);
+function elX(y){return -1760+(y-EL_C)*(-540/(EL_R-EL_C))}
 var SW2=77;   // street center to the middle of its sidewalk
-GEO.streets.push([[[elX(1500),1500],[elX(5400),5400]],0]);
+GEO.streets.push([[[elX(EL_C),EL_C],[elX(EL_R),EL_R]],0]);
+// Where things are in the aerial photos, in game space. Photo 1 looks down Elaine from Cornelia to Roscoe;
+// photo 2 looks along Roscoe from Elaine to Broadway.
+function I3(xi,yi){var bx=694+(yi-30)*.344;return [182-(bx-xi)*3.21,1830+(yi-30)*3.21]}
+function I5x(xi){return 182-(1365-xi)*1.825}
+function I5(xi,yi){var x=I5x(xi);return [x,rosY(x)+(yi-350)*1.825]}
 // the walk
 var D=[[START_X,1843],[118,corY(118)+SW2]];
 (function(){
-  var x=elX(1920)+SW2;D.push([x,corY(x)+SW2]);
-  var y=4600;for(var k=0;k<4;k++){x=elX(y)+SW2;y=rosY(x)-SW2}D.push([x,y]);
+  var x=-1700,y;for(var k=0;k<4;k++){y=corY(x)+SW2;x=elX(y)+SW2}D.push([x,y]);
+  y=4600;for(k=0;k<4;k++){x=elX(y)+SW2;y=rosY(x)-SW2}D.push([x,y]);
   D.push([x,rosY(x)+SW2]);
 })();
 var RX=D[3][0];   // the raised crosswalk across Roscoe, on the east side of Elaine
-var PARK={x0:RX+26,x1:RX+430,y0:rosY(RX)+104,y1:rosY(RX)+500};PARK.gx=(PARK.x0+PARK.x1)/2;
+var PARK={x0:I5x(150),x1:I5x(240)};PARK.y0=rosY(PARK.x0)+104;PARK.y1=rosY(PARK.x0)+560;PARK.gx=(PARK.x0+PARK.x1)/2;
 D.push([PARK.gx,rosY(PARK.gx)+SW2]);
 D.push([110,rosY(110)+SW2]);D.push([START_X,4720]);
 var DROUTE=D,DROUTE_C=cumOf(D);
 var DSTAGES=[{name:'Cornelia Ave',end:2},{name:'Elaine Place',end:3},{name:'Raised Crosswalk',end:4},{name:'Wendt Park',end:5},{name:'W Roscoe St',end:7}];
 var detour=null;
-// side streets carry on west past Elaine, so cars on Roscoe really do cross the raised crosswalk
+// Cornelia and Roscoe carry on west past Elaine, so cars on Roscoe really do cross the raised crosswalk
 MOUTHS.forEach(function(m){
   if(m.n==='Roscoe'&&m.s==='W'){m.p.unshift([-3100,rosY(-3100)])}
   if(m.n==='Cornelia'&&m.s==='W'){m.p.unshift([-3100,corY(-3100)])}
 });
-// houses and three-flats along Elaine, Cornelia and Roscoe
+// Buildings traced from the photos, trimmed so none of them sit on a street or sidewalk
+var WEST_BOXES=[];
 (function(){
   var boxes=GEO.bld.map(function(b){var xs=b[0].map(function(p){return p[0]}),ys=b[0].map(function(p){return p[1]});return [Math.min.apply(0,xs),Math.max.apply(0,xs),Math.min.apply(0,ys),Math.max.apply(0,ys)]});
-  function free(x0,x1,y0,y1){
-    if(x1>PARK.x0-10&&x0<PARK.x1+10&&y1>PARK.y0-10&&y0<PARK.y1+10)return false;
-    return !boxes.some(function(b){return x1>b[0]-8&&x0<b[1]+8&&y1>b[2]-8&&y0<b[3]+8});
+  var id=900000,M=112;
+  function clip(r){
+    var x0=r[0],x1=r[1],y0=r[2],y1=r[3],ym=(y0+y1)/2,xm=(x0+x1)/2;
+    if(y1>EL_C-M&&y0<EL_R+M){var ex=elX(clamp(ym,EL_C,EL_R));if(x1>ex-M&&x0<ex+M){if(xm>ex)x0=Math.max(x0,ex+M);else x1=Math.min(x1,ex-M)}}
+    [corY,rosY].forEach(function(f){var c=f(xm);if(y1>c-M&&y0<c+M){if(ym>c)y0=Math.max(y0,c+M);else y1=Math.min(y1,c-M)}});
+    x1=Math.min(x1,BL-10);
+    return [x0,x1,y0,y1];
   }
-  var id=900000;
-  function add(x0,x1,y0,y1){if(!free(x0,x1,y0,y1))return;boxes.push([x0,x1,y0,y1]);GEO.bld.push([[[x0,y0],[x1,y0],[x1,y1],[x0,y1]],2+Math.floor(seeded(id)*3),'b',id++,null,null])}
-  for(var y=corY(-2300)+130;y<rosY(-2400)-120;){var h=150+seeded(y)*90,ex=elX(y);
-    add(ex+128,ex+128+230,y,y+h);add(ex-128-230,ex-128,y+6,y+h+6);y+=h+20}
-  for(var x=elX(1950)+360;x<-60;){var w=170+seeded(x)*80,cy=corY(x);add(x,x+w,cy+128,cy+128+210);add(x+10,x+w+10,cy-128-230,cy-128);x+=w+20}
-  for(x=elX(1700)-360-240;x>-3000;){w=170+seeded(x)*80;cy=corY(x);add(x,x+w,cy+128,cy+128+210);add(x,x+w,cy-128-230,cy-128);x-=w+20}
-  for(x=elX(4500)+360;x<-860;){w=170+seeded(x)*80;var ry=rosY(x);add(x,x+w,ry-128-210,ry-128);add(x,x+w,ry+128,ry+128+230);x+=w+20}
+  function free(r){
+    if(r[1]>PARK.x0-6&&r[0]<PARK.x1+6&&r[3]>PARK.y0-6&&r[2]<PARK.y1+6)return false;
+    return !boxes.some(function(b){return r[1]>b[0]-6&&r[0]<b[1]+6&&r[3]>b[2]-6&&r[2]<b[3]+6});
+  }
+  function add(r,lv){r=clip(r);if(r[1]-r[0]<50||r[3]-r[2]<50||!free(r))return;boxes.push(r);WEST_BOXES.push(r);
+    GEO.bld.push([[[r[0],r[2]],[r[1],r[2]],[r[1],r[3]],[r[0],r[3]]],lv||(2+Math.floor(seeded(id)*3)),'b',id++,null,null])}
+  function a3(xi0,xi1,yi0,yi1){var p=I3(xi0,yi0),q=I3(xi1,yi1),q2=I3(xi1,yi0),p2=I3(xi0,yi1);add([Math.min(p[0],p2[0]),Math.max(q[0],q2[0]),p[1],q[1]])}
+  function a5(xi0,xi1,yi0,yi1){var p=I5(xi0,yi0),q=I5(xi1,yi1);add([p[0],q[0],Math.min(p[1],q[1]),Math.max(p[1],q[1])])}
+  // south of Cornelia between Elaine and Optima: a row of houses, then the courtyard buildings off Elaine
+  [[118,205,80,200],[212,282,78,200],[288,345,82,198],[350,380,86,196],[386,420,86,192],[428,488,84,198],[492,532,80,190],
+   [140,345,205,248],[180,300,255,330],[205,305,405,460],[205,530,475,522],[232,560,565,602],[255,365,607,705],[275,500,720,800],
+   // west of Elaine
+   [-120,40,90,210],[-120,120,235,282],[-120,75,288,345],[-120,75,385,432],[-120,118,442,482],[-120,128,505,548],[-120,125,556,602],[-120,150,640,702],[-120,60,740,830],[62,125,760,830]].forEach(function(b){a3(b[0],b[1],b[2],b[3])});
+  // the parking lot behind them, off Elaine
+  var l0=I3(175,335),l1=I3(410,470);GEO.lot.push([[l0[0],l0[1]],[l1[0],l0[1]],[l1[0],l1[1]],[l0[0],l1[1]]]);
+  // north of Cornelia
+  for(var x=-2600;x<-200;){var w=180+seeded(x)*90,cy=corY(x);add([x,x+w,cy-128-240,cy-128]);x+=w+22}
+  // Roscoe, north side then south side, from Elaine to Broadway
+  [[10,180,40,270],[200,330,90,268],[335,440,60,250],[445,550,50,252],[518,615,0,270],[622,700,60,240],[720,830,100,262],[812,910,50,280],[905,1130,40,252],[1135,1330,40,272],
+   [20,140,455,640],[242,292,460,600],[296,400,450,620],[402,452,465,640],[456,515,450,650],[518,583,440,640],[588,655,440,640],[690,830,410,680],[840,1000,405,680],[1050,1110,405,680]].forEach(function(b){a5(b[0],b[1],b[2],b[3])});
+  // and a few west of Elaine on Roscoe and Cornelia
+  for(x=-3000;x<elX(EL_R)-120;){w=180+seeded(x)*90;var ry=rosY(x);add([x,x+w,ry-128-240,ry-128]);add([x,x+w,ry+128,ry+128+260]);x+=w+22}
+  for(x=-3000;x<elX(EL_C)-120;){w=180+seeded(x)*90;cy=corY(x);add([x,x+w,cy+128,cy+128+260]);x+=w+22}
 })();
 // garbage cans along the back way
-CANS.push({side:'X',fx:-1300,y:corY(-1300)+60},{side:'X',fx:elX(3300)+60,y:3300},{side:'X',fx:-1500,y:rosY(-1500)+60},{side:'X',fx:PARK.x1-30,y:PARK.y0+24});
+CANS.push({side:'X',fx:-1100,y:corY(-1100)+60},{side:'X',fx:elX(3300)+60,y:3300},{side:'X',fx:-1400,y:rosY(-1400)+60},{side:'X',fx:PARK.x1-22,y:PARK.y0+20});
 function westTrees(){
-  // parkway trees on both sides of Elaine, and along Cornelia and Roscoe; a few are stumps
-  for(var y=1980;y<5300;y+=rnd(110,150)){if(Math.abs(y-rosY(elX(y)))<120)continue;
-    [1,-1].forEach(function(sd){var x=elX(y)+sd*64;if(sd>0&&y>PARK.y0-30&&y<PARK.y1)return;trees.push({x:x,y:y,r:rnd(20,30),s:Math.random(),stump:sd>0&&Math.random()<.12,west:true,walk:sd>0&&y<rosY(x)})})}
-  for(var x=elX(1950)+150;x<60;x+=rnd(110,150)){if(Math.abs(x)<200&&x>-200)continue;var cy=corY(x);
+  // parkway trees on both sides of Elaine, Cornelia and Roscoe; a few are stumps
+  for(var y=EL_C+140;y<EL_R-140;y+=rnd(110,150)){
+    [1,-1].forEach(function(sd){trees.push({x:elX(y)+sd*64,y:y,r:rnd(20,30),s:Math.random(),stump:sd>0&&Math.random()<.14,west:true,walk:sd>0})})}
+  for(var x=elX(EL_C)+150;x<-140;x+=rnd(110,150)){var cy=corY(x);
     trees.push({x:x,y:cy+64,r:rnd(20,28),s:Math.random(),stump:Math.random()<.12,west:true,walk:true});trees.push({x:x,y:cy-64,r:rnd(20,28),s:Math.random(),west:true})}
-  for(x=RX+150;x<60;x+=rnd(110,150)){var ry=rosY(x);if(Math.abs(x-PARK.gx)<60)continue;
+  for(x=RX+120;x<-140;x+=rnd(110,150)){var ry=rosY(x);if(Math.abs(x-PARK.gx)<60)continue;
     trees.push({x:x,y:ry+64,r:rnd(20,28),s:Math.random(),stump:Math.random()<.12,west:true,walk:true});trees.push({x:x,y:ry-64,r:rnd(20,28),s:Math.random(),west:true})}
-  // big trees around the park, the way it's tucked in among the buildings
-  [[.05,.15],[.03,.5],[.06,.9],[.5,.98],[.95,.92],[.97,.55],[.94,.08],[.3,.02],[.7,.03]].forEach(function(f){trees.push({x:PARK.x0+f[0]*(PARK.x1-PARK.x0),y:PARK.y0+f[1]*(PARK.y1-PARK.y0),r:rnd(30,42),s:Math.random(),yard:true})});
-  // big trees in back yards
-  for(var i=0;i<260;i++){var tx=rnd(-3000,-1300),ty=rnd(1950,5400);
-    if(Math.abs(tx-elX(ty))<150||Math.abs(ty-rosY(tx))<150||Math.abs(ty-corY(tx))<150)continue;
-    if(tx>PARK.x0+20&&tx<PARK.x1-20&&ty>PARK.y0+20&&ty<PARK.y1-20)continue;
+  // the big trees Wendt Park sits under
+  [[.0,.06],[1,.2],[.05,.55],[1,.6],[.1,.95],[.9,.98],[.5,1.02]].forEach(function(f){trees.push({x:PARK.x0+f[0]*(PARK.x1-PARK.x0),y:PARK.y0+f[1]*(PARK.y1-PARK.y0),r:rnd(30,42),s:Math.random(),yard:true})});
+  // back yards
+  for(var i=0;i<320;i++){var tx=rnd(-3000,-200),ty=rnd(1950,5400);
+    if(Math.abs(ty-corY(tx))<150||Math.abs(ty-rosY(tx))<150)continue;
+    if(ty>EL_C&&ty<EL_R&&Math.abs(tx-elX(ty))<150)continue;
+    if(tx>PARK.x0-10&&tx<PARK.x1+10&&ty>PARK.y0-10&&ty<PARK.y1+10)continue;
+    if(WEST_BOXES.some(function(b){return tx>b[0]-10&&tx<b[1]+10&&ty>b[2]-10&&ty<b[3]+10}))continue;
     if(BLD.some(function(b){return tx>b.x0-12&&tx<b.x1+12&&ty>b.y0-12&&ty<b.y1+12}))continue;
     trees.push({x:tx,y:ty,r:rnd(22,38),s:Math.random(),yard:true});
   }
 }
 function westParked(){
-  for(var y=2000;y<5300;y+=rnd(74,100)){if(Math.abs(y-rosY(elX(y)))<120)continue;
-    if(Math.random()<.8)parked.push({x:elX(y)-34,y:y,w:38,h:62,van:false,color:pick(CAR_COLORS),side:'W'})}
+  // Elaine: parking on the west side; Cornelia and Roscoe: both curbs
+  for(var y=EL_C+130;y<EL_R-130;y+=rnd(72,96))if(Math.random()<.85)parked.push({x:elX(y)-34,y:y,w:38,h:62,van:false,color:pick(CAR_COLORS),side:'W'});
+  [[corY,elX(EL_C)+130,-160],[rosY,RX+90,-220]].forEach(function(st){
+    for(var x=st[1];x<st[2];x+=rnd(72,96)){
+      if(st[0]===rosY&&Math.abs(x-PARK.gx)<40)continue;
+      [1,-1].forEach(function(sd){if(Math.random()<.8)parked.push({x:x,y:st[0](x)+sd*37,w:38,h:62,van:Math.random()<.08,color:pick(CAR_COLORS),side:'X',rot:sd>0?-Math.PI/2:Math.PI/2})});
+    }
+  });
 }
 // stepping off Broadway onto the back way
 function enterDetour(){
-  detour={stage:0,main:{R:ROUTE,C:ROUTE_C}};ROUTE=DROUTE;ROUTE_C=DROUTE_C;wp=1;player.s=0;stats.secret=true;
+  detour={stage:0,main:{R:ROUTE,C:ROUTE_C}};ROUTE=DROUTE;ROUTE_C=DROUTE_C;wp=1;player.s=0;stats.secret=true;bwalkT=2;
   say(player,'The back way. Cornelia to Elaine.',2.2);updateHUD();
 }
 function finishDetour(){
-  ROUTE=detour.main.R;ROUTE_C=detour.main.C;detour=null;
+  ROUTE=detour.main.R;ROUTE_C=detour.main.C;detour=null;bwalkers=[];
   level=LEVELS.indexOf(levelNamed('Roscoe'));var w0=LEVELS[level].w0;wp=w0+1;player.s=ROUTE_C[w0];
   var q=railAt(player.s);player.bx=player.x=q.x;player.y=q.y;chime();updateHUD(level);say(player,'Back on Broadway.',1.8);
 }
-function leaveDetour(){if(detour){ROUTE=detour.main.R;ROUTE_C=detour.main.C;detour=null}}
+function leaveDetour(){if(detour){ROUTE=detour.main.R;ROUTE_C=detour.main.C;detour=null}bwalkers=[]}
 function onRaised(){return Math.abs(player.x-RX)<30&&Math.abs(player.y-rosY(RX))<56}
 // drivers on Roscoe slow down for the raised crosswalk, and stop for anyone on it
 function raisedHold(v,vt){
@@ -2229,25 +2266,54 @@ function raisedHold(v,vt){
   if(onRaised()&&mode==='play'&&dist>-6&&(v.yielder||v.kind==='micro'||Math.random()<.97))vt=Math.min(vt,Math.sqrt(2*150*Math.max(0,dist-4)));
   return vt;
 }
-// a little traffic on Elaine, heading south
+// a little traffic on Elaine: in from Cornelia, down to Roscoe, then west on Roscoe
 var elaineT=3;
 function spawnElaine(){
-  var v=newVehicle(Math.random()<.25?'suv':'car','car'),x0=16;
-  var path=mkPath([lineP({x:elX(1500)+x0,y:1500},{x:elX(5400)+x0,y:5400})]),q=posAt(path,0);if(!spaceFree(q.x,q.y,v.w,v.h+20))return false;
-  v.mode='path';v.path=path;v.s=0;v.pathSpeed=rnd(15,20)*MPH;v.crosses=[];v.elaine=true;v.x=q.x;v.y=q.y;v.rot=q.rot;v.v=v.pathSpeed;
+  var v=newVehicle(Math.random()<.25?'suv':'car','car'),x0=14,a={x:elX(EL_C)+x0,y:EL_C},b={x:elX(EL_R)+x0,y:EL_R-30};
+  var path=mkPath([lineP(a,b),bezP(b,{x:elX(EL_R),y:EL_R},{x:elX(EL_R)-60,y:rosY(elX(EL_R)-60)}),lineP({x:elX(EL_R)-60,y:rosY(elX(EL_R)-60)},{x:-3100,y:rosY(-3100)})]),q=posAt(path,0);
+  if(!spaceFree(q.x,q.y,v.w,v.h+20))return false;
+  v.mode='path';v.path=path;v.s=0;v.pathSpeed=rnd(14,19)*MPH;v.crosses=[];v.elaine=true;v.x=q.x;v.y=q.y;v.rot=q.rot;v.v=v.pathSpeed*.6;
   vehicles.push(v);return true;
 }
-// Wendt Park: wood chips, a red play structure with slides, two red shade roofs, swings and spring riders
+// People out walking on the back way, some with dogs. Stop and the dog walkers stop too.
+var bwalkers=[],bwalkT=2,BDOGS=[['Biscuit','#c98b4a','Biscuit loves everybody. Sorry about the drool.'],['Juniper','#ece4d2','Juniper\'s shy, but she likes you.'],['Otis','#2b2b2b','Otis! Gentle. ...Good boy.']];
+function dAt(s){var c=DROUTE_C,r=DROUTE;s=clamp(s,0,c[c.length-1]);for(var i=0;i<r.length-1;i++)if(s<=c[i+1]||i===r.length-2){var L=(c[i+1]-c[i])||1,t=(s-c[i])/L,dx=(r[i+1][0]-r[i][0])/L,dy=(r[i+1][1]-r[i][1])/L;return {x:r[i][0]+dx*L*t,y:r[i][1]+dy*L*t,nx:-dy,ny:dx,ang:Math.atan2(dx,-dy)}}}
+function legOf(s){var ends=[[DROUTE_C[1],DROUTE_C[2]],[DROUTE_C[2],DROUTE_C[3]],[DROUTE_C[5],DROUTE_C[6]]];return ends.filter(function(e){return s>=e[0]-2&&s<=e[1]+2})[0]}
+function updateBackWalkers(dt){
+  if(!detour||explore){return}
+  var still=idleT>.5,leg=legOf(player.s);
+  bwalkT-=dt;
+  if(bwalkT<=0&&leg){bwalkT=rnd(5,9);var s0=Math.min(player.s+520,leg[1]-10);
+    if(s0-player.s>260){var dogi=bwalkers.filter(function(w){return w.named}).length,named=stats.bnamed<BDOGS.length&&Math.random()<.6,dog=named||Math.random()<.35;
+      var w={s:s0,lo:leg[0],off:(Math.random()<.5?-1:1)*15,v:rnd(40,55),coat:pick(COATS),dog:dog?(named?BDOGS[stats.bnamed][1]:pick(['#8a6a4a','#d8b26e','#5b5b5b'])):null,named:named?BDOGS[stats.bnamed]:null,step:0,greeted:false};
+      if(named)stats.bnamed++;bwalkers.push(w)}}
+  bwalkers.forEach(function(w){
+    var p=dAt(w.s),dy=w.s-player.s,stop=w.dog&&!w.met&&Math.abs(dy)<90&&still;
+    if(!stop){w.s-=w.v*dt;w.step+=dt*7}
+    var want=Math.abs(dy)<110?(player.off>0?-18:18)*(w.off>0?1:1):w.off;w.o=(w.o===undefined?w.off:w.o)+(want-(w.o===undefined?w.off:w.o))*Math.min(1,dt*4);
+    w.x=p.x+p.nx*w.o;w.y=p.y+p.ny*w.o;w.ang=p.ang+Math.PI;
+    if(w.dog){w.dx=w.x-Math.sin(p.ang)*22;w.dy=w.y+Math.cos(p.ang)*22}
+    if(!w.greeted&&Math.abs(dy)<40){w.greeted=true;if(!w.dog&&Math.random()<.6&&chatter(w,pick(HELLOS),1.8))stats.hi++}
+    if(w.dog&&!w.met&&still&&near(w.dx,w.dy,42)){w.met=true;stats.bdogs=(stats.bdogs||0)+1;pops.push({x:w.dx,y:w.dy-14,t:1.4,heart:true});addPoints(PTS.bdog,w.dx,w.dy);
+      say(w,w.named?w.named[2]:pick(['Say hi! He loves people.','She\'s friendly, go ahead.']),2.6)}
+  });
+  bwalkers=bwalkers.filter(function(w){return w.s>w.lo-20&&Math.abs(w.s-player.s)<900});
+}
+function drawBackWalkers(){
+  bwalkers.forEach(function(w){if(!vis(w.y-40,w.y+40))return;
+    if(w.dog){leash(w.x,w.y,w.dx,w.dy);dog(w.dx,w.dy,w.ang,w.dog,w.step*1.4+(w.met?worldTime*12:0));if(w.named&&Math.abs(player.y-w.y)<200)text(w.named[0],w.dx,w.dy+16,8,'#15171a','center',900)}
+    person(w.x,w.y,w.coat,w.ang,w.step,PS)});
+}
+// Wendt Park: wood chips, a red play structure with slides, red shade roofs, swings and spring riders, under big trees
 var PK={};
 function setupPark(){
-  var P=PARK;
-  PK={play:{x:P.x0+200,y:P.y0+190},gaz1:{x:P.x0+60,y:P.y0+70},gaz2:{x:P.x1-70,y:P.y1-80},swing:{x:P.x0+110,y:P.y1-60},spring1:{x:P.x0+60,y:P.y0+260},spring2:{x:P.x1-60,y:P.y0+120},
-    bench1:{x:P.x0+30,y:P.y1-150},bench2:{x:P.x1-30,y:P.y0+260},swingAmp:0,springT:0,slideT:0};
-  // kids hiding: under the slide, behind a shade roof, behind a tree
-  PK.hiders=[{x:PK.play.x+70,y:PK.play.y+40,coat:'#e8412f',where:'under the slide'},{x:PK.gaz2.x+26,y:PK.gaz2.y-6,coat:'#2f86d6',where:'behind the shade roof'},{x:P.x0+26,y:P.y1-40,coat:'#3f9a5a',where:'behind the tree'}];
+  var P=PARK,cx=P.gx;
+  PK={play:{x:cx-6,y:P.y0+230},gaz1:{x:P.x0+34,y:P.y0+70},gaz2:{x:P.x1-34,y:P.y1-150},swing:{x:cx,y:P.y1-46},spring1:{x:P.x0+30,y:P.y0+150},spring2:{x:P.x1-30,y:P.y0+330},
+    bench1:{x:P.x0+14,y:P.y1-120},bench2:{x:P.x1-14,y:P.y0+120},swingAmp:0,springT:0,slideT:0};
+  PK.hiders=[{x:PK.play.x+44,y:PK.play.y+54,coat:'#e8412f'},{x:PK.gaz2.x+16,y:PK.gaz2.y+26,coat:'#2f86d6'},{x:P.x0+16,y:P.y1-24,coat:'#3f9a5a'}];
   PK.found=0;PK.asked=false;
-  PK.kids=[{x:P.gx-30,y:P.y0+40,coat:'#f08a24',kid:true,side:'W'}];
-  PK.parents=[{x:PK.bench1.x,y:PK.bench1.y,coat:'#5a6e8c',side:'W'},{x:PK.bench2.x,y:PK.bench2.y,coat:'#8e5572',side:'E'}];
+  PK.kids=[{x:cx+30,y:P.y0+40,coat:'#f08a24'}];
+  PK.parents=[{x:PK.bench1.x+8,y:PK.bench1.y,coat:'#5a6e8c',side:'W'},{x:PK.bench2.x-8,y:PK.bench2.y,coat:'#8e5572',side:'E'}];
 }
 function enterPark(){explore={kind:'park'};exTarget=null;player.off=player.offT=0;player.x=player.bx=PARK.gx;player.y=PARK.y0+14;
   if(!PK.asked){PK.asked=true;say(PK.kids[0],'Wanna play hide and seek? Find us!',2.8)}else say(player,'Back to Wendt Park.',1.6)}
@@ -2255,41 +2321,49 @@ function exitPark(){
   var i=DSTAGES[3].end;player.s=ROUTE_C[i];if(wp<=i){wp=i+1;if(detour&&detour.stage===3){detour.stage=4;chime();updateHUD(0)}}var q=railAt(player.s);player.bx=player.x=q.x;player.y=q.y;explore=null;exTarget=null;cameraTarget=player.y-VH*.56;
 }
 function setupWest(){
-  setupPark();
+  setupPark();stats.bnamed=0;bwalkers=[];
   var P=PARK;
   // litter on the back way and in the park
-  [[1,2,.3],[1,2,.6],[1,2,.85],[2,3,.25],[2,3,.5],[2,3,.78],[5,6,.3],[5,6,.7]].forEach(function(l){var a=D[l[0]],b=D[l[1]];litter.push({x:a[0]+(b[0]-a[0])*l[2]+rnd(-5,5),y:a[1]+(b[1]-a[1])*l[2]+rnd(-5,5),kind:pick(LITTER_KINDS),a:rnd(0,6.28)})});
-  for(var i=0;i<7;i++)litter.push({x:rnd(P.x0+30,P.x1-30),y:rnd(P.y0+40,P.y1-30),kind:pick(LITTER_KINDS),a:rnd(0,6.28),park:true});
+  [[1,2,.25],[1,2,.5],[1,2,.8],[2,3,.2],[2,3,.45],[2,3,.7],[2,3,.9],[5,6,.25],[5,6,.6],[5,6,.85]].forEach(function(l){var a=D[l[0]],b=D[l[1]];litter.push({x:a[0]+(b[0]-a[0])*l[2]+rnd(-5,5),y:a[1]+(b[1]-a[1])*l[2]+rnd(-5,5),kind:pick(LITTER_KINDS),a:rnd(0,6.28)})});
+  for(var i=0;i<7;i++)litter.push({x:rnd(P.x0+20,P.x1-20),y:rnd(P.y0+40,P.y1-30),kind:pick(LITTER_KINDS),a:rnd(0,6.28),park:true});
   // plant a tree where the city took one down
   trees.forEach(function(t){if(t.west&&t.walk&&t.stump)deed({kind:'tree',label:'Plant a tree',x:t.x,y:t.y,r:40,tree:t,act:function(){this.tree.planted=true;stats.trees++;say(player,pick(['There. Grow.','Elaine needs more shade.','See you in twenty years.']),2);addPoints(PTS.tree,this.x,this.y)}})});
-  // a recycling cart blown over on Cornelia
-  var rb={x:-900,y:corY(-900)+SW2-22};NPC.recycle=rb;
+  // Cornelia: a recycling cart blown over, chalk art to add to, and somebody moving out
+  var rb={x:-760,y:corY(-760)+SW2-22};NPC.recycle=rb;
   deed({kind:'recycle',label:'Stand up the recycling cart',x:rb.x,y:rb.y+10,act:function(){stats.recycle=true;say(player,'Blue cart, back on its wheels.',2);addPoints(PTS.recycle,rb.x,rb.y)}});
-  // somebody dumped a mattress on Elaine
-  var my=3000,mt={x:elX(my)+SW2+26,y:my};NPC.mattress=mt;
+  var mu={x:-420,y:corY(-420)+SW2+2};NPC.mural=mu;
+  deed({kind:'mural',label:'Add to the chalk drawing',x:mu.x,y:mu.y,act:function(){stats.mural=true;say(player,'A little sun for the corner.',2);addPoints(PTS.mural,mu.x,mu.y)}});
+  var mv={x:-1250,y:corY(-1250)+SW2+24,coat:'#4b6b4b',side:'E'};NPC.mover=mv;
+  deed({kind:'couch',label:'Help carry the couch',x:mv.x-14,y:mv.y-8,act:function(){stats.couch=true;say(mv,'Oh thank you. Third floor walk-up. Kidding, it\'s just to the truck.',3);addPoints(PTS.couch,mv.x,mv.y)}});
+  // Elaine: a neighbor watering the parkway, a dumped mattress, a little free pantry, a ball from the park
+  var le={x:elX(2600)+SW2+26,y:2600,coat:'#7a9a4a',side:'E'};NPC.lee=le;
+  deed({kind:'water',label:'Help water the garden',x:le.x-12,y:le.y,act:function(){stats.water=true;say(le,'Bless you. The tomatoes thank you.',2.4);addPoints(PTS.water,le.x,le.y)}});
+  var my=3150,mt={x:elX(my)+SW2+28,y:my};NPC.mattress=mt;
   deed({kind:'mattress',label:'Report the dumped mattress to 311',x:mt.x-14,y:mt.y,act:function(){stats.reports++;say(player,'Reported to 311. Bulk pickup, please.',2.4);addPoints(PTS.report,mt.x,mt.y)}});
-  // a neighbor out front on Elaine
-  NPC.lee={side:'E',x:elX(2500)+SW2+24,y:2500,coat:'#7a9a4a'};NPC.lee.hi=false;
-  // a ball that rolled away from the park
-  stats.ball={x:elX(4200)+SW2+4,y:4200,got:false,back:false};
+  var pp={x:elX(3750)+SW2+26,y:3750};NPC.pantry=pp;
+  deed({kind:'pantry',label:'Leave a can at the little free pantry',x:pp.x-12,y:pp.y,act:function(){stats.pantry=true;say(player,'Take what you need, leave what you can.',2.4);addPoints(PTS.pantry,pp.x,pp.y)}});
+  stats.ball={x:elX(4250)+SW2+4,y:4250,got:false,back:false};
+  // Roscoe: a kid whose bike chain came off
+  var bk={x:PARK.x1+140,y:rosY(PARK.x1+140)+SW2+20,coat:'#d9822b',kid:true,side:'E'};NPC.biker=bk;
+  deed({kind:'chain',label:'Help fix the bike chain',x:bk.x,y:bk.y-8,act:function(){stats.chain=true;say(bk,'It works! Thanks!!',2);addPoints(PTS.chain,bk.x,bk.y);bk.fixed=true}});
   deed({kind:'enterPark',label:'Go into Wendt Park',x:P.gx,y:rosY(P.gx)+SW2,r:32,avail:function(){return !!detour&&!explore},act:function(){enterPark()}});
-  deed({kind:'swing',label:'Push the swing',x:PK.swing.x+20,y:PK.swing.y+16,r:30,avail:function(){return explore&&explore.kind==='park'},act:function(){PK.swingAmp=1;say(PK.swinger,'Higher! HIGHER!',2.2);addPoints(PTS.swing,this.x,this.y)}});
-  deed({kind:'slide',label:'Go down the slide',x:PK.play.x+10,y:PK.play.y-40,r:28,avail:function(){return explore&&explore.kind==='park'},act:function(){PK.slideT=.9;whee();addPoints(PTS.slide,this.x,this.y)}});
-  deed({kind:'spring',label:'Ride the spring rider',x:PK.spring1.x,y:PK.spring1.y+18,r:28,avail:function(){return explore&&explore.kind==='park'},act:function(){PK.springT=2.2;say(player,'Boing. Boing. Boing.',1.8);addPoints(PTS.spring,this.x,this.y)}});
+  deed({kind:'swing',label:'Push the swing',x:PK.swing.x+20,y:PK.swing.y+16,r:28,avail:function(){return explore&&explore.kind==='park'},act:function(){PK.swingAmp=1;say(PK.swinger,'Higher! HIGHER!',2.2);addPoints(PTS.swing,this.x,this.y)}});
+  deed({kind:'slide',label:'Go down the slide',x:PK.play.x+8,y:PK.play.y-30,r:26,avail:function(){return explore&&explore.kind==='park'},act:function(){PK.slideT=.9;whee();addPoints(PTS.slide,this.x,this.y)}});
+  deed({kind:'spring',label:'Ride the spring rider',x:PK.spring1.x,y:PK.spring1.y+16,r:26,avail:function(){return explore&&explore.kind==='park'},act:function(){PK.springT=2.2;say(player,'Boing. Boing. Boing.',1.8);addPoints(PTS.spring,this.x,this.y)}});
   PK.swinger={get x(){return PK.swing.x+20},get y(){return PK.swing.y+Math.sin(worldTime*3)*PK.swingAmp*10}};
-  deed({kind:'giveBall',label:'Give the ball back',x:PK.kids[0].x,y:PK.kids[0].y,r:34,avail:function(){return stats.ball.got&&!stats.ball.back},act:function(){stats.ball.back=true;say(PK.kids[0],'Our ball! Thank you!!',2.2);addPoints(PTS.ball,this.x,this.y)}});
+  deed({kind:'giveBall',label:'Give the ball back',x:PK.kids[0].x,y:PK.kids[0].y,r:32,avail:function(){return stats.ball.got&&!stats.ball.back},act:function(){stats.ball.back=true;say(PK.kids[0],'Our ball! Thank you!!',2.2);addPoints(PTS.ball,this.x,this.y)}});
 }
 function updateWest(dt){
   var B=stats.ball;
   if(B&&!B.got&&near(B.x,B.y,15)){B.got=true;say(player,'Somebody\'s ball. Probably from the park.',2.2)}
   if(detour&&!stats.raised&&onRaised()){stats.raised=true;say(player,'Raised crosswalk. Drivers actually slow down here.',2.6);addPoints(PTS.raised,player.x,player.y)}
-  var L=NPC.lee;if(L&&!L.hi&&detour&&near(L.x,L.y,80)){L.hi=true;stats.hi++;say(player,'Hi there!',1.4);say(L,'Morning! Nice to see someone walking.',2.4,.8);addPoints(PTS.hi,L.x,L.y)}
+  updateBackWalkers(dt);
   if(explore&&explore.kind==='park'){
-    PK.hiders.forEach(function(h){if(!h.found&&near(h.x,h.y,34)){h.found=true;PK.found++;say(h,'You found me!',1.8);addPoints(PTS.seek,h.x,h.y);
+    PK.hiders.forEach(function(h){if(!h.found&&near(h.x,h.y,30)){h.found=true;PK.found++;say(h,'You found me!',1.8);addPoints(PTS.seek,h.x,h.y);
       if(PK.found===PK.hiders.length){stats.seekAll=true;say(PK.kids[0],'You found everybody! You\'re it!',2.6,1.6);addPoints(PTS.seekAll,player.x,player.y)}}});
   }
   PK.swingAmp=Math.max(0,(PK.swingAmp||0)-dt*.15);PK.springT=Math.max(0,(PK.springT||0)-dt);
-  if(PK.slideT>0){PK.slideT-=dt;var f=1-Math.max(0,PK.slideT)/.9;player.x=player.bx=PK.play.x+10+f*70;player.y=PK.play.y-40+f*80;if(PK.slideT<=0){say(player,'Wheee!',1.2)}}
+  if(PK.slideT>0){PK.slideT-=dt;var f=1-Math.max(0,PK.slideT)/.9;player.x=player.bx=PK.play.x+8+f*40;player.y=PK.play.y-30+f*70;if(PK.slideT<=0){say(player,'Wheee!',1.2)}}
 }
 function whee(){if(!AC||muted)return;var t=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();o.type='triangle';o.frequency.setValueAtTime(900,t);o.frequency.exponentialRampToValueAtTime(300,t+.8);env(g,t,.01,.12,.8);o.connect(g);g.connect(master);o.start(t);o.stop(t+.9)}
 function roof(x,y,s,col){ctx.fillStyle='rgba(0,0,0,.22)';ctx.fillRect(x-s/2+4,y-s/2+5,s,s);rect(x-s/2,y-s/2,s,s,col);ctx.strokeStyle='rgba(0,0,0,.25)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x-s/2,y-s/2);ctx.lineTo(x+s/2,y+s/2);ctx.moveTo(x+s/2,y-s/2);ctx.lineTo(x-s/2,y+s/2);ctx.stroke();rect(x-3,y-3,6,6,'#7f1d1d')}
@@ -2300,7 +2374,6 @@ function drawWest(){
     rect(RX-30,ry-55,60,110,'#8f9396');rect(RX-34,ry-55,4,110,'rgba(0,0,0,.25)');rect(RX+30,ry-55,4,110,'rgba(255,255,255,.18)');
     for(var k=ry-50;k<ry+46;k+=14)rect(RX-24,k,48,8,'rgba(246,246,240,.92)');
     [[RX-44,1],[RX+44,-1]].forEach(function(e){for(var k2=ry-48;k2<ry+44;k2+=16){ctx.fillStyle='rgba(246,246,240,.85)';ctx.beginPath();ctx.moveTo(e[0],k2);ctx.lineTo(e[0]+e[1]*8,k2+6);ctx.lineTo(e[0],k2+12);ctx.fill()}});
-    // pedestrian crossing sign on the corner
     var sx=RX+58,sy=ry-70;ctx.save();ctx.translate(sx,sy);ctx.rotate(Math.PI/4);rect(-7,-7,14,14,'#ffd23f');ctx.restore();ctx.fillStyle='#15171a';ctx.beginPath();ctx.arc(sx,sy-2,1.6,0,Math.PI*2);ctx.fill();rect(sx-.8,sy,1.6,4,'#15171a');
   }
   // chalk arrow on the Cornelia corner, pointing the back way
@@ -2309,35 +2382,40 @@ function drawWest(){
 function drawPark(){
   var P=PARK;if(!vis(P.y0-60,P.y1+60))return;
   rect(P.x0,P.y0,P.x1-P.x0,P.y1-P.y0,'#6e4f36');
-  ctx.fillStyle='rgba(0,0,0,.12)';for(var i=0;i<160;i++){ctx.fillRect(P.x0+seeded(i*1.7)*(P.x1-P.x0),P.y0+seeded(i*2.9)*(P.y1-P.y0),3,2)}
-  ctx.strokeStyle='#2b2b2b';ctx.lineWidth=2;ctx.strokeRect(P.x0,P.y0,P.x1-P.x0,P.y1-P.y0);rect(P.gx-24,P.y0-2,48,5,'#6e4f36');
-  text('WENDT PARK',P.x0+8,P.y0+12,9,'rgba(255,255,255,.85)','left',900);
-  // play structure: gray decks, two red roofs, red slides and a climbing wall
-  var p=PK.play;rect(p.x-60,p.y-40,90,70,'#8a9096');rect(p.x-56,p.y-36,40,30,'#9aa1a7');rect(p.x-12,p.y-36,38,62,'#9aa1a7');
-  ctx.strokeStyle='#a32020';ctx.lineWidth=12;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(p.x+18,p.y-30);ctx.quadraticCurveTo(p.x+70,p.y-10,p.x+80,p.y+40);ctx.stroke();
-  ctx.lineWidth=9;ctx.beginPath();ctx.moveTo(p.x-50,p.y+20);ctx.lineTo(p.x-80,p.y+60);ctx.stroke();ctx.lineCap='butt';
-  rect(p.x+28,p.y+4,6,30,'#555b61');roof(p.x-36,p.y-22,34,'#b4322b');roof(p.x+8,p.y-14,30,'#b4322b');
-  roof(PK.gaz1.x,PK.gaz1.y,46,'#b4322b');roof(PK.gaz2.x,PK.gaz2.y,46,'#b4322b');
-  // swings: a long frame and three seats, one a red bucket
-  var s=PK.swing;rect(s.x-60,s.y-3,120,5,'#9aa1a7');rect(s.x-62,s.y-8,5,16,'#7d848a');rect(s.x+57,s.y-8,5,16,'#7d848a');
+  ctx.fillStyle='rgba(0,0,0,.12)';for(var i=0;i<140;i++){ctx.fillRect(P.x0+seeded(i*1.7)*(P.x1-P.x0),P.y0+seeded(i*2.9)*(P.y1-P.y0),3,2)}
+  ctx.strokeStyle='#2b2b2b';ctx.lineWidth=2;ctx.strokeRect(P.x0,P.y0,P.x1-P.x0,P.y1-P.y0);rect(P.gx-22,P.y0-2,44,5,'#6e4f36');
+  text('WENDT',P.x0+6,P.y0+12,8,'rgba(255,255,255,.85)','left',900);text('PARK',P.x0+6,P.y0+22,8,'rgba(255,255,255,.85)','left',900);
+  // play structure: gray decks, red roofs, red slides
+  var p=PK.play;rect(p.x-36,p.y-34,64,60,'#8a9096');rect(p.x-32,p.y-30,28,26,'#9aa1a7');rect(p.x-2,p.y-30,26,50,'#9aa1a7');
+  ctx.strokeStyle='#a32020';ctx.lineWidth=10;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(p.x+12,p.y-26);ctx.quadraticCurveTo(p.x+48,p.y-6,p.x+50,p.y+40);ctx.stroke();
+  ctx.lineWidth=8;ctx.beginPath();ctx.moveTo(p.x-30,p.y+20);ctx.lineTo(p.x-44,p.y+52);ctx.stroke();ctx.lineCap='butt';
+  roof(p.x-18,p.y-18,26,'#b4322b');roof(p.x+12,p.y-6,24,'#b4322b');
+  roof(PK.gaz1.x,PK.gaz1.y,40,'#b4322b');roof(PK.gaz2.x,PK.gaz2.y,40,'#b4322b');
+  // swings: a frame and three seats, one a red bucket
+  var s=PK.swing;rect(s.x-54,s.y-3,108,5,'#9aa1a7');rect(s.x-56,s.y-8,5,16,'#7d848a');rect(s.x+51,s.y-8,5,16,'#7d848a');
   [-30,0,20].forEach(function(o,i){var sw=i===2?Math.sin(worldTime*3)*PK.swingAmp*10:Math.sin(worldTime*1.3+i)*2;rect(s.x+o-5,s.y+12+sw,10,5,i===2?'#b4322b':'#2b2b2b')});
   if(PK.swinger)person(PK.swinger.x,PK.swinger.y+14,'#ffd23f',0,0,PS*.7);
-  // spring riders
   [[PK.spring1,'#3fb8a2'],[PK.spring2,'#e0b13a']].forEach(function(r,i){var b=i===0?Math.sin(worldTime*14)*Math.min(1,PK.springT)*3:0;ctx.fillStyle='#2b2b2b';ctx.beginPath();ctx.arc(r[0].x,r[0].y+4,5,0,Math.PI*2);ctx.fill();rrect(r[0].x-9,r[0].y-8+b,18,13,5);ctx.fillStyle=r[1];ctx.fill()});
-  [PK.bench1,PK.bench2].forEach(function(b){rect(b.x-6,b.y-18,12,36,'#7a5a3e')});
-  // hiders: just a head peeking out until you find them
+  [PK.bench1,PK.bench2].forEach(function(b){rect(b.x-5,b.y-18,10,36,'#7a5a3e')});
   PK.hiders.forEach(function(h){if(h.found)person(h.x,h.y,h.coat,0,worldTime*4,PS*.75);else{ctx.fillStyle='#3b2a20';ctx.beginPath();ctx.arc(h.x,h.y,4,0,Math.PI*2);ctx.fill()}});
   PK.kids.forEach(function(k){person(k.x,k.y,k.coat,0,0,PS*.75)});
   PK.parents.forEach(function(k){person(k.x,k.y,k.coat,faceSide(k.side),0,PS)});
   if(stats&&stats.ball&&stats.ball.back){ctx.fillStyle='#e8412f';ctx.beginPath();ctx.arc(PK.kids[0].x+10,PK.kids[0].y+8,4,0,Math.PI*2);ctx.fill()}
 }
+function deedDone(kind){return deeds.some(function(d){return d.kind===kind&&d.done})}
 function drawWestThings(){
-  var rb=NPC.recycle;if(rb&&vis(rb.y-30,rb.y+30)){var up=stats.recycle;ctx.save();ctx.translate(rb.x,rb.y);ctx.rotate(up?0:1.3);rrect(-8,-10,16,20,3);ctx.fillStyle='#2f6fa8';ctx.fill();rect(-8,-12,16,4,'#245a8a');ctx.restore()}
-  var mt=NPC.mattress;if(mt&&vis(mt.y-40,mt.y+40)){ctx.save();ctx.translate(mt.x,mt.y);ctx.rotate(.15);rrect(-14,-26,28,52,4);ctx.fillStyle='#e9e2d0';ctx.fill();ctx.strokeStyle='#bdb39c';ctx.lineWidth=1;for(var q=-20;q<24;q+=8){ctx.beginPath();ctx.moveTo(-12,q);ctx.lineTo(12,q);ctx.stroke()}ctx.restore();if(deeds.some(function(d){return d.kind==='mattress'&&d.done}))cone(mt.x+20,mt.y-20)}
-  var L=NPC.lee;if(L&&vis(L.y-40,L.y+40)){person(L.x,L.y,L.coat,faceSide('E'),0,PS);ctx.strokeStyle='#3f9a5a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(L.x+6,L.y+4);ctx.lineTo(L.x+18,L.y+14);ctx.stroke()}
+  var rb=NPC.recycle;if(rb&&vis(rb.y-30,rb.y+30)){ctx.save();ctx.translate(rb.x,rb.y);ctx.rotate(stats.recycle?0:1.3);rrect(-8,-10,16,20,3);ctx.fillStyle='#2f6fa8';ctx.fill();rect(-8,-12,16,4,'#245a8a');ctx.restore()}
+  var mu=NPC.mural;if(mu&&vis(mu.y-30,mu.y+30)){ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=1.4;ctx.beginPath();ctx.arc(mu.x-16,mu.y-4,6,0,Math.PI*2);ctx.moveTo(mu.x-4,mu.y+6);ctx.lineTo(mu.x+10,mu.y-8);ctx.lineTo(mu.x+18,mu.y+6);ctx.stroke();
+    if(stats.mural){ctx.strokeStyle='#ffd23f';ctx.beginPath();ctx.arc(mu.x+30,mu.y-2,5,0,Math.PI*2);ctx.stroke();for(var r=0;r<8;r++){var a=r*Math.PI/4;ctx.beginPath();ctx.moveTo(mu.x+30+Math.cos(a)*7,mu.y-2+Math.sin(a)*7);ctx.lineTo(mu.x+30+Math.cos(a)*10,mu.y-2+Math.sin(a)*10);ctx.stroke()}}}
+  var mv=NPC.mover;if(mv&&vis(mv.y-60,mv.y+60)){car(mv.x+10,corY(mv.x+10)+37,46,90,'#f0efe9','delivery',-Math.PI/2,false,'H',true);rect(mv.x-30,mv.y-14,stats.couch?0:40,16,'#7d5a8c');if(!stats.couch)rect(mv.x-30,mv.y-14,40,4,'#5f436b');person(mv.x,mv.y,mv.coat,Math.PI,0,PS)}
+  var mt=NPC.mattress;if(mt&&vis(mt.y-40,mt.y+40)){ctx.save();ctx.translate(mt.x,mt.y);ctx.rotate(.15);rrect(-12,-24,24,48,4);ctx.fillStyle='#e9e2d0';ctx.fill();ctx.strokeStyle='#bdb39c';ctx.lineWidth=1;for(var q=-18;q<22;q+=8){ctx.beginPath();ctx.moveTo(-10,q);ctx.lineTo(10,q);ctx.stroke()}ctx.restore();if(deedDone('mattress'))cone(mt.x+18,mt.y-20)}
+  var le=NPC.lee;if(le&&vis(le.y-40,le.y+40)){rect(le.x-4,le.y-30,16,20,'#5f8f3e');person(le.x,le.y,le.coat,-Math.PI/2,0,PS);ctx.strokeStyle='#3f9a5a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(le.x-6,le.y-2);ctx.quadraticCurveTo(le.x-14,le.y-14,le.x-4,le.y-22);ctx.stroke();
+    if(stats.water||Math.sin(worldTime*2)>.3){ctx.fillStyle='rgba(90,170,230,.6)';ctx.beginPath();ctx.arc(le.x-2,le.y-22,3,0,Math.PI*2);ctx.fill()}}
+  var pp=NPC.pantry;if(pp&&vis(pp.y-30,pp.y+30)){rect(pp.x-1,pp.y-2,2,10,'#5b4a36');rect(pp.x-9,pp.y-12,18,14,'#c8291f');rect(pp.x-6,pp.y-9,12,8,'#f1e7c9');text('PANTRY',pp.x,pp.y+16,6.5,'#15171a','center',900)}
+  var bk=NPC.biker;if(bk&&vis(bk.y-40,bk.y+40)){rider(bk.x+16,bk.y,'#2f86d6',bk.fixed?-Math.PI/2:-1.1,'bike');person(bk.x,bk.y,bk.coat,Math.PI/2,0,PS*.78)}
   var B=stats&&stats.ball;if(B&&!B.got&&vis(B.y-10,B.y+10)){ctx.fillStyle='#e8412f';ctx.beginPath();ctx.arc(B.x,B.y,4.5,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.beginPath();ctx.arc(B.x,B.y,4.5,-.6,.6);ctx.stroke()}
+  drawBackWalkers();
 }
-
 /* ================= loop ================= */
 
 function resize(){
