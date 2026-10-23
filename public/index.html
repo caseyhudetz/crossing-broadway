@@ -900,6 +900,7 @@ function jump(){if(mode!=='play'||transitioning||player.jumpT>0)return;player.ju
 function walkUpdate(dt){
   if(mode!=='play'||transitioning)return;
   if(player.jumpT>0)player.jumpT=Math.max(0,player.jumpT-dt);
+  if(explore){exploreUpdate(dt);return}
   // stepping to one side of the sidewalk, on the stretches that run north-south
   var axisV=railAxis()==='v';if(!axisV)player.offT=0;
   player.off+=clamp(player.offT-player.off,-90*dt,90*dt);player.x=player.bx+player.off;
@@ -1017,12 +1018,14 @@ function showEnd(won){
   var tiles=[[n+'/'+LEVELS.length,'crossings'],[st.pts||0,newBest?'points, new best':'neighbor points'],[fastest?fastest+' mph':'–','fastest car',fastest>30],
     [st.litter||0,'litter tossed'],[(st.dogs||0)+'/4','dogs met'],[st.close||0,'close calls']];
   var chips=[];
-  if(st.cat==='home')chips.push('Smokey is home');if(st.family)chips.push('Ran into Casey, Jessie, Henry & George');if(st.directions)chips.push('Gave directions to '+plural(st.directions,'visitor'));if(st.market)chips.push('Shopped the farmers market');if(st.crossed)chips.push('Helped '+plural(st.crossed,'neighbor')+' cross');if(st.groceries===true)chips.push('Carried groceries');
+  if(st.vader)chips.push('Saw Darth Vader on Broadway');if(st.cat==='home')chips.push('Smokey is home');if(st.family)chips.push('Ran into Casey, Jessie, Henry & George');if(st.directions)chips.push('Gave directions to '+plural(st.directions,'visitor'));if(st.market)chips.push('Bought '+plural(st.market,'thing')+' at the market');if(st.crossed)chips.push('Helped '+plural(st.crossed,'neighbor')+' cross');if(st.groceries===true)chips.push('Carried groceries');
   if(st.trees)chips.push('Planted '+plural(st.trees,'tree'));if(st.reports)chips.push('Reported '+plural(st.reports,'problem')+' to 311');if(st.scooters)chips.push('Moved '+plural(st.scooters,'scooter'));
   if(st.book==='new')chips.push('Swapped a book');if(st.bag)chips.push('Handed out a poop bag');if(st.ate)chips.push('Ate a donut');else if(st.donut)chips.push('Donut from Stan\'s');
   if(st.petition)chips.push('Signed for a safer Broadway');if(st.glove&&st.glove.back)chips.push('Returned a lost glove');if(st.tip)chips.push('Tipped the musician');if(st.lemonade)chips.push('Bought lemonade');if(st.hop)chips.push('Did the hopscotch');if(st.chalk)chips.push('Drew with chalk');if(st.door)chips.push('Held the door');
+  if(st.jay)chips.push('Crossed on Don\'t Walk '+(st.jay===1?'once':st.jay+' times'));if(st.lost)chips.push('Lost '+st.lost+' points');
   if(st.dodged)chips.push('Dodged '+plural(st.dodged,'poop'));if(st.poop)chips.push('Stepped in poop');
-  chips=chips.slice(0,6);
+  // the best stuff first, then any penalties, so they don't get cut
+  var bad=chips.filter(function(c){return /Don't Walk|Lost /.test(c)});chips=chips.filter(function(c){return bad.indexOf(c)<0}).slice(0,6-bad.length).concat(bad);
   showCard('<div class="plate'+(won?'':' red')+'"><h1>'+(won?'You made it<br>to Belmont.':'Broadway<br>wins.')+'</h1></div><div class="body">'+
     '<div class="stats">'+tiles.map(function(t){return '<div><b'+(t[2]?' class="hot"':'')+'>'+t[0]+'</b><span>'+t[1]+'</span></div>'}).join('')+'</div>'+
     (chips.length?'<div class="chips">'+chips.map(function(c){return '<span>'+c+'</span>'}).join('')+'</div>':'')+
@@ -1500,7 +1503,33 @@ var MARKET={x0:-230,x1:BL,y0:8285,y1:8600};
 var FAMILY=[{name:'Henry',coat:'#d9822b',kid:true,line:'Hi! Do you need any help?'},{name:'George',coat:'#3e8e5a',kid:true,line:'We can help you cross!'},
   {name:'Jessie',coat:'#a14d6b',line:'Have a good walk!'},{name:'Casey',coat:'#2f4f6f',line:'Careful at Aldine. It\'s school time.'}];
 var family=null;
-var PTS={directions:20,family:10,market:10,tip:10,petition:15,lemonade:10,hopscotch:10,chalk:10,door:10,glove:15,hi:5,litter:10,dodge:5,dog:15,allDogs:50,book:20,tree:25,report:15,walk:10,cat:50,scooter:10,bag:10,donut:10,groceries:25,escort:30};
+var GOODS=[['Apples','#c8291f','Honeycrisp, picked Tuesday!'],['Sourdough','#c79a5b','Still warm. Don\'t tell anyone.'],['Tomatoes','#d9412f','Heirlooms. The ugly ones taste best.'],['Cheese curds','#f2d98a','They squeak. That means fresh.'],
+  ['Flowers','#e86ea0','Zinnias. They\'ll last a week.'],['Kettle corn','#f4e3b5','Sweet and salty. Like Chicago.'],['Tamales','#7a9a4a','Pork or cheese? Get both.'],['Peaches','#f0a35e','Michigan peaches. Last of the season.'],
+  ['Honey','#e0a21a','From hives in Lincoln Park!'],['Pickles','#5b8a3a','Garlic dill. Brave choice.'],['Sunflowers','#f2c12e','Big ones for big kitchens.'],['Jam','#8e2a4a','Strawberry rhubarb. Grandma\'s recipe.']];
+function marketTents(){var M=MARKET,o=[];for(var r=0;r<3;r++)for(var c=0;c<4;c++)o.push({x:M.x1-34-c*62,y:M.y0+34+r*80,front:c===0,r:r,c:c});return o}
+// Exploring the market: step off the sidewalk and walk anywhere inside it. Walk back onto the sidewalk to carry on.
+var explore=null,exTarget=null,camX=280;
+function enterMarket(){explore={};exTarget=null;player.off=player.offT=0;player.x=player.bx=BL+6;say(player,'Let\'s look around. (Walk back to the sidewalk to keep going.)',3)}
+function exitMarket(){
+  // back on Broadway at the spot you walked out, not where you went in
+  var r=ROUTE,c=ROUTE_C,s=player.s;
+  for(var i=1;i<r.length;i++){var a=r[i-1],b=r[i];if(a[0]===W&&b[0]===W&&player.y>=Math.min(a[1],b[1])&&player.y<=Math.max(a[1],b[1])){s=c[i-1]+Math.abs(player.y-a[1]);break}}
+  s=clamp(s,c[Math.max(0,wp-1)],c[Math.min(wp,c.length-1)]);
+  player.s=s;var q=railAt(s);player.bx=player.x=q.x;player.y=q.y;explore=null;exTarget=null;cameraTarget=player.y-VH*.56;
+}
+function exploreUpdate(dt){
+  var vx=0,vy=0;keysDown.forEach(function(k){vx+=k[0];vy+=k[1]});if(held){vx+=held[0];vy+=held[1]}
+  if(exTarget){var dx=exTarget.x-player.x,dy=exTarget.y-player.y,dd=Math.hypot(dx,dy);if(dd<6)exTarget=null;else{vx=dx/dd;vy=dy/dd}}
+  var l=Math.hypot(vx,vy);if(!l){idleT+=dt;return}
+  idleT=0;vx/=l;vy/=l;var M=MARKET;
+  var nx=clamp(player.x+vx*95*dt,M.x0+12,BL+22),ny=clamp(player.y+vy*95*dt,M.y0+10,M.y1-10),mx=nx-player.x,my=ny-player.y;
+  if(Math.abs(mx)+Math.abs(my)<.01){exTarget=null;return}
+  player.x=player.bx=nx;player.y=ny;player.ang=Math.atan2(mx,-my);player.walk+=Math.hypot(mx,my);
+  stepAcc+=Math.hypot(mx,my);if(stepAcc>22){stepAcc=0;tick()}
+  cameraTarget=player.y-VH*.56;
+  if(player.x>BL+18)exitMarket();
+}
+var PTS={close:-10,jaywalk:-15,vader:10,directions:20,family:10,market:10,tip:10,petition:15,lemonade:10,hopscotch:10,chalk:10,door:10,glove:15,hi:5,litter:10,dodge:5,dog:15,allDogs:50,book:20,tree:25,report:15,walk:10,cat:50,scooter:10,bag:10,donut:10,groceries:25,escort:30};
 var HOLD=.7;   // seconds of standing still to help
 var HELLOS=['Hi!','Morning!','Hey.','Nice day for it.','Careful out there.','Love your jacket.','Go Cubs.','Hi, neighbor.','Watch that alley.',
   'Is it me or is everyone driving faster?','You dropped something. Kidding.','They should put a light here.'];
@@ -1515,6 +1544,8 @@ var COATS=['#6a8caf','#b5651d','#4b6b4b','#8e5572','#3a3a3a','#c2a878','#a33b3b'
 var NPC={};   // the people in the little stories: Ruth and her cat, Mrs. Alvarez, Mr. Delgado, Mrs. Hughes, the dog owner
 function spot(k,dx){var s=SPOTS[k];return {side:s[0],x:shopX(s[0])+(dx||0),y:s[1]}}
 function addPoints(n,x,y){
+  // close calls and crossing against the light cost points; it never goes below zero
+  if(n<0){var lost=Math.min(-n,stats.pts);stats.pts-=lost;stats.lost=(stats.lost||0)+lost;pops.push({x:x,y:y-18,t:1.4,text:'\u2212'+(-n),bad:true});updateHUD();return}
   stats.pts+=n;pops.push({x:x,y:y-18,t:1.3,text:'+'+n});
   while(stats.pts>=stats.nextHeart){stats.nextHeart+=100;if(lives<3){lives++;chime();pops.push({x:player.x,y:player.y-34,t:1.8,heart:true})}}
   updateHUD();
@@ -1584,11 +1615,13 @@ function resetLife(){
   deed({kind:'chalk',label:'Draw with chalk',x:ch.x,y:ch.y,act:function(){stats.chalk=true;say(ch,'You drew a sun! Cool.',2);addPoints(PTS.chalk,ch.x,ch.y)}});
   var sr=NPC.stroller=spot('stroller');sr.coat='#7a6a55';
   deed({kind:'door',label:'Hold the door',x:sr.x,y:sr.y,act:function(){stats.door=true;say(sr,'Oh, thank you. Wheels and doors, I tell you.',2.4);addPoints(PTS.door,sr.x,sr.y);sr.into={x:BL-14,y:sr.y};sr.leaveT=0}});
-  [['market1','Buy apples','Honeycrisp, picked Tuesday!','#c8291f'],['market2','Buy flowers','Zinnias. They\'ll last a week.','#e86ea0'],['market3','Buy honey','From hives in Lincoln Park!','#e0a21a']].forEach(function(m){
-    var v=NPC[m[0]]=spot(m[0]);v.x=BL-22;v.coat='#4b6b4b';v.goods=m[3];
-    deed({kind:'market',label:m[1],x:BL-4,y:v.y,act:function(){stats.market++;say(v,m[2],2.2);addPoints(PTS.market,v.x,v.y)}});
+  // one vendor per tent; the three along the sidewalk you can buy from without going in
+  marketTents().forEach(function(t,i){
+    var g=GOODS[i],v=NPC['vendor'+i]={side:'W',x:t.x+22,y:t.y+2,coat:COATS[(i+3)%COATS.length],goods:g[1]};
+    deed({kind:'market',label:'Buy '+g[0].toLowerCase(),x:v.x,y:v.y,r:t.front?40:34,avail:function(){return t.front||!!explore},act:function(){stats.market++;say(v,g[2],2.2);addPoints(PTS.market,v.x,v.y);tick()}});
   });
-  stats.directions=0;stats.market=0;stats.hop=false;stats.glove=null;
+  deed({kind:'enter',label:'Explore the market',x:W-6,y:8440,r:30,avail:function(){return !explore},act:function(){enterMarket()}});
+  stats.vaderAt=rnd(3000,9400);explore=null;exTarget=null;stats.directions=0;stats.market=0;stats.hop=false;stats.glove=null;
   family=null;NPC.glover=null;
   var cat=NPC.cat;
   deed({kind:'cat',label:'Pick up the gray cat',x:cat.x,y:cat.y,r:40,avail:function(){return !stats.cat},act:function(){stats.cat='carry';cat.held=true;say(player,NPC.ruth.asked?'Smokey! Let\'s get you home.':'Whose cat are you?',2.2)}});
@@ -1679,6 +1712,7 @@ function updateLife(dt){
     stats.walked[cw]=true;
     var L=LEVELS.filter(function(L){return L.ctrl==='signal'&&L.cws.indexOf(cw)>=0})[0];
     if(L&&sig(L).ped==='W'){addPoints(PTS.walk,player.x,player.y);say(player,'Walk sign. Love to see it.',1.6)}
+    else if(L&&sig(L).ped==='DW'){stats.jay=(stats.jay||0)+1;addPoints(PTS.jaywalk,player.x,player.y);say(player,'Should have waited for the walk sign.',1.8)}
   }
   // someone walking with you: Mr. Delgado or Mrs. Hughes across the street, Mrs. Alvarez up the block
   if(follower){
@@ -1705,6 +1739,14 @@ function updateLife(dt){
       if(stats.dogs===DOG_WALKS.length){addPoints(PTS.allDogs,player.x,player.y-16);say(player,'Met all four. Best walk ever.',2.4,1.2)}
     }});
   });
+  // a surprise: somebody in full Darth Vader, lightsaber and all, walking up Broadway
+  var legLeft=ROUTE[wp]?Math.abs(ROUTE[wp][1]-player.y)+(ROUTE[wp+1]&&ROUTE[wp+1][0]===ROUTE[wp][0]?Math.abs(ROUTE[wp+1][1]-ROUTE[wp][1]):0):0;
+  if(!stats.vaderOut&&mySide&&!explore&&railAxis()==='v'&&player.y>stats.vaderAt&&legLeft>420){
+    var vy0=player.y+540;
+    MOUTHS.forEach(function(m){var e=m.curb[1]-m.hw-30;if(m.s===mySide&&e>player.y+60)vy0=Math.min(vy0,e)});
+    DRIVES.forEach(function(r){var e=r.y-45;if(mySide==='W'&&e>player.y+60)vy0=Math.min(vy0,e)});
+    if(vy0-player.y>200){stats.vaderOut=true;walkers.push({vader:true,side:mySide,x:walkX(mySide)+14,y:vy0,dir:-1,v:36,coat:'#111',greeted:true,step:0})}
+  }
   // people out for a walk, coming the other way or getting passed
   walkerT-=dt;
   if(walkerT<=0&&mySide&&railAxis()==='v'){
@@ -1726,6 +1768,10 @@ function updateLife(dt){
     if(!w.turn&&Math.abs(dy)<110)w.x+=(lx-w.x)*Math.min(1,dt*5);   // they step around you
     if(w.convo&&!w.talked&&Math.abs(dy)<300&&chatter(w,w.convo[0],2.4)){w.talked=true;if(w.pal)say(w.pal,w.convo[1],2.6,2)}
     if(!w.greeted&&!w.convo&&mySide===w.side&&Math.abs(dy)<40){w.greeted=true;if(Math.random()<.5&&chatter(w,pick(HELLOS),1.8))stats.hi++}
+    if(w.vader){
+      if(Math.abs(dy)<320&&(w.breath=(w.breath||0)-dt)<=0){w.breath=2.4;breathe()}
+      if(!w.said&&mySide===w.side&&Math.abs(dy)<110){w.said=true;stats.vader=true;say(w,pick(['*kshhh*... I find your lack of crosswalks disturbing.','*kshhh*... Join the walk side.','*kshhh*... Look both ways. The Empire is watching.']),3);addPoints(PTS.vader,w.x,w.y)}
+    }
     if(w.dog){var ang=w.turn?w.turn*Math.PI/2:w.dir===1?Math.PI:0;w.dx=w.x+Math.sin(ang)*22;w.dy=w.y-Math.cos(ang)*22}
   });
   deeds.forEach(function(d){if(d.kind==='dog'){var w=d.walker;if(w.gone||w.turn)d.done=true;else{d.x=w.dx;d.y=w.dy;if(d.done)w.met=true}}});
@@ -1743,7 +1789,7 @@ function updateLife(dt){
       if(al2>v.h/2&&al2<v.h/2+160&&Math.abs(-dx2*fy2+dy2*fx2)<v.w/2+30){v.yelled=true;if(Math.random()<.35&&chatter(v,pick(MEAN),1.8))horn(v,'single')}
     }
     if(!v.close&&inv<=0&&v.v>8*MPH&&localHit(v,player.x,player.y,PR+14,PR+14)&&!localHit(v,player.x,player.y,PR-2,PR-2)){
-      v.close=true;stats.close++;say(player,pick(['Whoa!','Hey!','Yikes.']),1.4);if(!reduceMotion)shake=Math.max(shake,.12);
+      v.close=true;stats.close++;addPoints(PTS.close,player.x,player.y);say(player,pick(['Whoa!','Hey!','Yikes.']),1.4);if(!reduceMotion)shake=Math.max(shake,.12);
     }
   });
   argueT-=dt;
@@ -1795,18 +1841,19 @@ function melody(){if(!AC||muted)return;var t=AC.currentTime;[523,659,784,659,880
 function drawMarket(){
   var M=MARKET;if(!vis(M.y0,M.y1))return;
   rect(M.x0,M.y0,M.x1-M.x0,M.y1-M.y0,'#d9d4c6');
-  text('FARMERS MARKET',(M.x0+M.x1)/2-30,M.y0+16,11,'#3f7d4f','center',900);
+  text('FARMERS MARKET',M.x0+10,M.y0+9,10,'#3f7d4f','left',900);
   var cols=['#c8291f','#2f6fa8','#3f7d4f','#e0a21a','#8e5572'];
   for(var r=0;r<3;r++)for(var c=0;c<4;c++){
     var tx=M.x1-34-c*62,ty=M.y0+34+r*80;if(tx-16<M.x0)continue;
     ctx.fillStyle='rgba(0,0,0,.18)';ctx.fillRect(tx-15,ty-12,32,32);
     rect(tx-16,ty-16,32,32,'#f6f3ec');for(var k=0;k<4;k++)rect(tx-16+k*8,ty-16,4,32,cols[(r+c)%cols.length]);
-    rect(tx-16,ty+16,32,6,'#8a6a48');[0,1,2].forEach(function(q){ctx.fillStyle=cols[(r*3+c+q)%cols.length];ctx.beginPath();ctx.arc(tx-9+q*9,ty+19,2.6,0,Math.PI*2);ctx.fill()});
+    var gd=GOODS[r*4+c][1];rect(tx+16,ty-14,6,30,'#8a6a48');[0,1,2,3].forEach(function(q){ctx.fillStyle=gd;ctx.beginPath();ctx.arc(tx+19,ty-9+q*7,2.4,0,Math.PI*2);ctx.fill()});
+    if(explore||c===0){ctx.font='800 7px Overpass, Arial, sans-serif';text(GOODS[r*4+c][0].toUpperCase(),tx,ty+24,7,'#15171a','center',900)}
   }
   for(var i=0;i<7;i++){var px=M.x0+40+seeded(i*3.3)*(M.x1-M.x0-120),py=M.y0+60+seeded(i*7.1)*(M.y1-M.y0-90);person(px,py+Math.sin(worldTime*2+i)*1.5,COATS[i%COATS.length],seeded(i)*6.28,0,PS)}
 }
 function drawPeople(){
-  var all=['ruth','alvarez','tourist1','tourist2','busker','petition','lemon','chalk','stroller','market1','market2','market3','glover'];
+  var all=['ruth','alvarez','tourist1','tourist2','busker','petition','lemon','chalk','stroller','glover','vader'].concat(GOODS.map(function(g,i){return 'vendor'+i}));
   all.forEach(function(k){var n=NPC[k];if(!n||n.gone||!vis(n.y-50,n.y+50))return;
     ctx.save();ctx.globalAlpha=npcAlpha(n);
     var moving=n.leaveT!==undefined&&n.leaveT>=0||n.walking||(follower&&follower.npc===n),ang=follower&&follower.npc===n?player.ang:moving?(n.into?faceSide(n.side)+Math.PI:(n.dir||-1)===1?Math.PI:0):faceSide(n.side);
@@ -1816,7 +1863,6 @@ function drawPeople(){
       if(!reduceMotion&&Math.abs(player.y-n.y)<260)for(var q=0;q<2;q++){var a=(worldTime*.6+q*.5)%1;ctx.globalAlpha=npcAlpha(n)*(1-a);text('\u266a',n.x+8+q*8,n.y-14-a*26,12,'#5a3e6e','center',900)}ctx.globalAlpha=npcAlpha(n)}
     if(k==='stroller'&&!(n.leaveT>=0)){ctx.fillStyle='#2b2b2b';rrect(n.x+5,n.y+6,12,16,4);ctx.fill();rect(BL-4,n.y-10,4,20,'#6b4a2b')}
     if(k==='chalk'&&stats.chalk){ctx.strokeStyle='#ffd23f';ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(n.x+16,n.y+18,5,0,Math.PI*2);ctx.stroke();for(var r2=0;r2<8;r2++){var a2=r2*Math.PI/4;ctx.beginPath();ctx.moveTo(n.x+16+Math.cos(a2)*7,n.y+18+Math.sin(a2)*7);ctx.lineTo(n.x+16+Math.cos(a2)*10,n.y+18+Math.sin(a2)*10);ctx.stroke()}}
-    if(n.goods){rect(n.x+8,n.y-10,10,20,'#8a6a48');ctx.fillStyle=n.goods;for(var g2=0;g2<3;g2++){ctx.beginPath();ctx.arc(n.x+13,n.y-6+g2*6,2.4,0,Math.PI*2);ctx.fill()}}
     person(n.x,n.y,n.coat,ang,n.step||0,n.kid?PS*.78:PS);
     if(n.map){ctx.save();ctx.translate(n.x,n.y);ctx.rotate(ang);rect(-7,-14,14,6,'#f4f1ea');rect(-1,-14,1,6,'#c9c4b8');ctx.restore()}
     ctx.restore();
@@ -1893,9 +1939,26 @@ function drawLife(){
     if(!vis(w.y-40,w.y+40))return;
     var ang=w.turn?w.turn*Math.PI/2:w.dir===1?Math.PI:0;
     if(w.dog){leash(w.x,w.y,w.dx-Math.sin(ang)*8,w.dy+Math.cos(ang)*8);dog(w.dx,w.dy,ang,w.dog,w.step*1.4+(w.met?worldTime*12:0))}
-    person(w.x,w.y,w.coat,ang,w.step,PS);
+    if(w.vader)vader(w.x,w.y,ang,w.step);
+    else person(w.x,w.y,w.coat,ang,w.step,PS);
   });
 }
+function vader(x,y,ang,step){
+  ctx.save();ctx.translate(x,y);ctx.rotate(ang);
+  ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(-3,-3,15,11,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#0d0d0f';ctx.beginPath();ctx.moveTo(-14,10);ctx.lineTo(14,10);ctx.lineTo(11,-4);ctx.lineTo(-11,-4);ctx.closePath();ctx.fill();   // cape
+  var sw=Math.sin(step)*3;ctx.fillStyle='#1a1a1d';rrect(-9,-4+sw,5,9,2);ctx.fill();rrect(4,-4-sw,5,9,2);ctx.fill();
+  ctx.fillStyle='#1c1c20';rrect(-9,-6,18,12,5);ctx.fill();
+  ctx.fillStyle='#050506';ctx.beginPath();ctx.arc(0,-1,6.6,0,Math.PI*2);ctx.fill();   // helmet
+  ctx.fillStyle='rgba(255,255,255,.35)';ctx.beginPath();ctx.arc(-2,-3.5,2,0,Math.PI*2);ctx.fill();
+  ctx.save();ctx.shadowColor='#ff2a1a';ctx.shadowBlur=12;ctx.strokeStyle='#ff4a3a';ctx.lineWidth=3;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(11,-2);ctx.lineTo(16,-30);ctx.stroke();ctx.strokeStyle='#ffd9d4';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(11,-2);ctx.lineTo(16,-30);ctx.stroke();ctx.restore();
+  rect(9.5,-1,3,6,'#9aa0a6');
+  ctx.restore();
+}
+// heavy, mechanical breathing
+function breathe(){if(!AC||muted)return;var t=AC.currentTime;[0,1.1].forEach(function(o,i){var n=AC.createBufferSource(),f=AC.createBiquadFilter(),g=AC.createGain();n.buffer=noiseBuf;f.type='bandpass';f.Q.value=1.2;f.frequency.value=i?500:800;
+  g.gain.setValueAtTime(.0001,t+o);g.gain.exponentialRampToValueAtTime(.09,t+o+.35);g.gain.exponentialRampToValueAtTime(.0001,t+o+.9);n.connect(f);f.connect(g);g.connect(master);n.start(t+o);n.stop(t+o+1)})}
 function drawBubbles(){
   if(mode==='tour'||mode==='title')return;
   // what you can help with right here: a ring around it, and a ring that fills while you stand still
@@ -1907,7 +1970,7 @@ function drawBubbles(){
     rrect(lx,dh.y+22,lw,19,9.5);ctx.fillStyle='rgba(21,23,26,.9)';ctx.fill();text(dh.label,lx+lw/2,dh.y+32,11,'#ffd23f','center',900);
   }}
   pops.forEach(function(q){if(!vis(q.y-20,q.y+20))return;ctx.globalAlpha=Math.min(1,q.t*1.5);
-    if(q.text){text(q.text,q.x+1,q.y+1,14,'rgba(0,0,0,.35)','center',900);text(q.text,q.x,q.y,14,'#ffd23f','center',900);ctx.globalAlpha=1;return}
+    if(q.text){text(q.text,q.x+1,q.y+1,14,'rgba(0,0,0,.35)','center',900);text(q.text,q.x,q.y,14,q.bad?'#ff5a4f':'#ffd23f','center',900);ctx.globalAlpha=1;return}
     ctx.fillStyle='#e8412f';ctx.beginPath();var x=q.x,y=q.y;ctx.moveTo(x,y+5);ctx.bezierCurveTo(x-9,y-2,x-5,y-9,x,y-4);ctx.bezierCurveTo(x+5,y-9,x+9,y-2,x,y+5);ctx.fill();ctx.globalAlpha=1});
   var viewL=-OX/SC+6,viewR=(SW-OX)/SC-6;
   bubbles.forEach(function(b){
@@ -1974,6 +2037,8 @@ function frame(t){
   });
   pigeons=pigeons.filter(function(g){return g.fly<1.6});
   cameraY+=(cameraTarget-cameraY)*Math.min(1,dt*6);
+  // the view slides west to follow you around the market
+  if(mode!=='tour'){camX+=((explore?clamp(player.x+60,-40,280):280)-camX)*Math.min(1,dt*4);OX=SW/2-camX*SC}
   if(mode==='tour'&&tour)tourCamera(dt);
   draw();requestAnimationFrame(frame);
 }
@@ -2004,6 +2069,8 @@ canvas.addEventListener('pointerdown',function(e){
     var ty=e.clientY-r.top,py=(player.y-cameraY)*SC;
     // tap your walker to jump
     if(Math.hypot(e.clientX-r.left-(player.x*SC+OX),ty-py)<38){jump();sdown=false;return}
+    // in the market, tap where you want to go
+    if(explore){exTarget={x:(e.clientX-r.left-OX)/SC,y:ty/SC+cameraY};taps.push({x:exTarget.x,y:exTarget.y,t:.35});return}
     held=railAxis()==='v'?(ty<py?[0,-1]:[0,1]):((e.clientX-r.left)<r.width/2?[-1,0]:[1,0]);
     taps.push({x:(e.clientX-r.left-OX)/SC,y:(e.clientY-r.top)/SC+cameraY,t:.35});
     try{canvas.setPointerCapture(e.pointerId)}catch(_){}
@@ -2012,6 +2079,7 @@ canvas.addEventListener('pointerdown',function(e){
     var ids=Object.keys(ptrs);if(ids.length===2){var a=ptrs[ids[0]],b=ptrs[ids[1]];pinch={d:Math.hypot(a.x-b.x,a.y-b.y)}}}
 });
 canvas.addEventListener('pointermove',function(e){
+  if(mode==='play'&&sdown&&explore){var r0=canvas.getBoundingClientRect();exTarget={x:(e.clientX-r0.left-OX)/SC,y:(e.clientY-r0.top)/SC+cameraY};return}
   if(mode==='play'&&sdown&&held){
     var mx=e.clientX-sx,my=e.clientY-sy;
     if(Math.abs(my)>18&&Math.abs(my)>Math.abs(mx))held=[0,my>0?1:-1];
