@@ -968,9 +968,10 @@ function walkUpdate(dt){
   if(explore){exploreUpdate(dt);return}
   // stepping to one side of the sidewalk, on the stretches that run north-south
   var axisV=railAxis()==='v';if(!axisV)player.offT=0;
-  player.off+=clamp(player.offT-player.off,-90*dt,90*dt);player.sx=(player.sx||0)+clamp((player.scooter?-33:0)-(player.sx||0),-80*dt,80*dt);player.x=player.bx+player.off+player.sx;
+  player.off+=clamp(player.offT-player.off,-90*dt,90*dt);player.x=player.bx+player.off;
   var u=held||(keysDown.length?keysDown[keysDown.length-1]:null),d=0;
-  var spd=player.scooter?180:95;if(u)d=spd*dt;else if(pend>0&&pendDir){u=pendDir;d=Math.min(pend,spd*dt);pend-=d}
+  var spd=player.scooter&&!peopleNear()?150:95;   // on a scooter, slow to walking pace around people
+  if(u)d=spd*dt;else if(pend>0&&pendDir){u=pendDir;d=Math.min(pend,spd*dt);pend-=d}
   if(!u||!d){idleT+=dt;noteWait(dt);return}
   idleT=0;
   // heading west instead of across Broadway at the very start takes the back way
@@ -979,7 +980,7 @@ function walkUpdate(dt){
   var r=ROUTE,c=ROUTE_C,minS=c[Math.max(0,wp-1)];
   var ns=clamp(player.s+sg*d,minS,c[c.length-1]),q=railAt(ns),mx=q.x-player.bx,my=q.y-player.y;
   if(Math.abs(mx)+Math.abs(my)<.01)return;
-  player.s=ns;player.bx=q.x;player.x=q.x+player.off+(player.sx||0);player.y=q.y;player.ang=Math.atan2(mx,-my);player.walk+=Math.hypot(mx,my);
+  player.s=ns;player.bx=q.x;player.x=q.x+player.off;player.y=q.y;player.ang=Math.atan2(mx,-my);player.walk+=Math.hypot(mx,my);
   stepAcc+=Math.hypot(mx,my);if(stepAcc>22){stepAcc=0;tick()}
   cameraTarget=player.y-VH*.56;
   while(wp<r.length&&player.s>=c[wp]-3){
@@ -1013,6 +1014,7 @@ function noteWait(dt){
   if(detour||!stats)return;var L=cur();
   if(wp===L.w1&&Math.abs(player.s-ROUTE_C[L.w1-1])<30){stats.waits=stats.waits||{};stats.waits[L.name]=(stats.waits[L.name]||0)+dt}
 }
+function peopleNear(){return detour&&bwalkers.some(function(w){return Math.abs(w.s-player.s)<90})}
 function walkFindings(st){
   var out=[],w=st.waits||{},names=Object.keys(w).sort(function(a,b){return w[b]-w[a]});
   if(names.length&&w[names[0]]>=8)out.push('Longest wait at a curb: '+Math.round(w[names[0]])+' seconds at '+names[0]+'.');
@@ -1106,7 +1108,7 @@ function showEnd(won){
   var tiles=[[n+'/'+LEVELS.length,'crossings'],[st.pts||0,newBest?'points, new best':'neighbor points'],[fastest?fastest+' mph':'–','fastest car',fastest>30],
     [st.litter||0,'litter tossed'],[(st.dogs||0)+'/4','dogs met'],[st.close||0,'close calls']];
   var chips=[];
-  if(st.secret)chips.push('Took the back way');if(st.raised)chips.push('Crossed on the raised crosswalk');if(st.seekAll)chips.push('Found every kid at Wendt Park');if(st.ball&&st.ball.back)chips.push('Returned the ball');if(st.bdogs)chips.push('Met '+st.bdogs+' back-way dog'+(st.bdogs>1?'s':''));if(st.couch)chips.push('Helped with the couch');if(st.yoda)chips.push('Got advice from Yoda');if(st.scooted)chips.push('Scootered Elaine, parked it right');if(st.pantry)chips.push('Stocked the little free pantry');
+  if(st.secret)chips.push('Took the back way');if(st.raised)chips.push('Crossed on the raised crosswalk');if(st.seekAll)chips.push('Found every kid at Wendt Park');if(st.ball&&st.ball.back)chips.push('Returned the ball');if(st.bdogs)chips.push('Met '+st.bdogs+' back-way dog'+(st.bdogs>1?'s':''));if(st.couch)chips.push('Helped with the couch');if(st.yoda)chips.push('Got advice from Yoda');if(st.scooted===true)chips.push('Scootered Elaine, returned the scooter');if(st.leaves)chips.push('Jumped in '+plural(st.leaves,'leaf pile'));if(st.pantry)chips.push('Stocked the little free pantry');
   if(st.vader)chips.push('Saw Darth Vader on Broadway');if(st.bikeBus)chips.push('Cheered the bike bus');if(st.popcorn!==undefined)chips.push('Caught '+st.popcorn+' popcorn');if(st.cat==='home')chips.push('Smokey is home');if(st.family)chips.push('Ran into Casey, Jessie, Henry & George');if(st.directions)chips.push('Gave directions to '+plural(st.directions,'visitor'));if(st.market)chips.push('Bought '+plural(st.market,'thing')+' at the market');if(st.crossed)chips.push('Helped '+plural(st.crossed,'neighbor')+' cross');if(st.groceries===true)chips.push('Carried groceries');
   if(st.trees)chips.push('Planted '+plural(st.trees,'tree'));if(st.reports)chips.push('Reported '+plural(st.reports,'problem')+' to 311');if(st.scooters)chips.push('Moved '+plural(st.scooters,'scooter'));
   if(st.book==='new')chips.push('Swapped a book');if(st.bag)chips.push('Handed out a poop bag');if(st.ate)chips.push('Ate a donut');else if(st.donut)chips.push('Donut from Stan\'s');
@@ -1443,7 +1445,7 @@ function drawPlayer(){
   ctx.fillStyle='rgba(0,0,0,'+(.3-lift*.12)+')';ctx.beginPath();ctx.ellipse(-3,-4,13-lift*3,10-lift*2,0,0,Math.PI*2);ctx.fill();
   ctx.translate(lift*3,-lift*10);ctx.scale(sc,sc);ctx.rotate(player.ang===undefined?Math.PI/2:player.ang);
   var sw=Math.sin((player.walk||0)*.32)*4;
-  if(player.scooter){sw=0;ctx.fillStyle='#1b1d20';rrect(-3.5,-20,7,36,3);ctx.fill();ctx.fillStyle='#3db7e4';rrect(-2.5,-24,5,9,2);ctx.fill();rect(-8,-24,16,2.5,'#1b1d20')}
+  if(player.scooter){sw=0;kick()}else if(stats&&stats.scooted==='folded'){ctx.save();ctx.translate(-13,0);ctx.scale(.7,.7);kick();ctx.restore()}
   ctx.fillStyle='#15171a';rrect(-11,-5+sw,6,11,3);ctx.fill();rrect(5,-5-sw,6,11,3);ctx.fill();
   ctx.fillStyle='#fff';rrect(-10,-8,20,15,6);ctx.fill();
   ctx.fillStyle='#ffd23f';rrect(-8.5,-6.5,17,12,5);ctx.fill();
@@ -1662,7 +1664,7 @@ function exploreUpdate(dt){
   if(park){if(player.y<P.y0-8)exitPark();return}
   if(player.x>BL+18){if(popGame){popGame.t=0;updatePopcorn(0)}exitMarket()}
 }
-var PTS={hit:-25,yoda:10,scootPark:10,mural:10,couch:20,water:10,pantry:15,chain:15,bdog:10,recycle:10,swing:10,slide:5,spring:5,seek:15,seekAll:25,ball:15,raised:10,bikeBus:10,popcorn:2,close:-10,jaywalk:-15,vader:10,directions:20,family:10,market:10,tip:10,petition:15,lemonade:10,hopscotch:10,chalk:10,door:10,glove:15,hi:5,litter:10,dodge:5,dog:15,allDogs:50,book:20,tree:25,report:15,walk:10,cat:50,scooter:10,bag:10,donut:10,groceries:25,escort:30};
+var PTS={leaves:5,hit:-25,yoda:10,scootPark:10,mural:10,couch:20,water:10,pantry:15,chain:15,bdog:10,recycle:10,swing:10,slide:5,spring:5,seek:15,seekAll:25,ball:15,raised:10,bikeBus:10,popcorn:2,close:-10,jaywalk:-15,vader:10,directions:20,family:10,market:10,tip:10,petition:15,lemonade:10,hopscotch:10,chalk:10,door:10,glove:15,hi:5,litter:10,dodge:5,dog:15,allDogs:50,book:20,tree:25,report:15,walk:10,cat:50,scooter:10,bag:10,donut:10,groceries:25,escort:30};
 var HOLD=.7;   // seconds of standing still to help
 var HELLOS=['Hi!','Morning!','Hey.','Nice day for it.','Careful out there.','Love your jacket.','Go Cubs.','Hi, neighbor.','Watch that alley.',
   'Is it me or is everyone driving faster?','You dropped something. Kidding.','They should put a light here.'];
@@ -2218,14 +2220,15 @@ var WEST_BOXES=[];
     [corY,rosY].forEach(function(f){var c=f(cx);if(Math.abs(cy-c)>400)return;var sd=cy>c?1:-1;
       b[0].forEach(function(p){var m=hwW(p[0])+54;if(sd>0)p[1]=Math.max(p[1],f(p[0])+m);else p[1]=Math.min(p[1],f(p[0])-m)})});
     // and from Elaine, which the map draws a little off from where it really is
-    if(cy>EL_C+100&&cy<EL_R-100&&Math.max.apply(0,xs)>elX(cy)-400&&Math.min.apply(0,xs)<elX(cy)+400){var e=cx>elX(cy)?1:-1;
-      b[0].forEach(function(p){if(p[1]<EL_C+100||p[1]>EL_R-100)return;var ex=elX(p[1]);if(e>0)p[0]=Math.max(p[0],ex+111);else p[0]=Math.min(p[0],ex-111)})}
+    if(cy>EL_C&&cy<EL_R&&Math.max.apply(0,xs)>elX(cy)-400&&Math.min.apply(0,xs)<elX(cy)+400){var e=cx>elX(cy)?1:-1;
+      b[0].forEach(function(p){if(p[1]<EL_C||p[1]>EL_R)return;var ex=elX(p[1]);if(e>0)p[0]=Math.max(p[0],ex+111);else p[0]=Math.min(p[0],ex-111)})}
   });
   var boxes=GEO.bld.map(function(b){var xs=b[0].map(function(p){return p[0]}),ys=b[0].map(function(p){return p[1]});return [Math.min.apply(0,xs),Math.max.apply(0,xs),Math.min.apply(0,ys),Math.max.apply(0,ys)]});
   var id=900000,M=112;
   function clip(r){
     var x0=r[0],x1=r[1],y0=r[2],y1=r[3],ym=(y0+y1)/2,xm=(x0+x1)/2;
-    if(y1>EL_C-M&&y0<EL_R+M){var ex=elX(clamp(ym,EL_C,EL_R));if(x1>ex-M&&x0<ex+M){if(xm>ex)x0=Math.max(x0,ex+M);else x1=Math.min(x1,ex-M)}}
+    if(y1>EL_C-M&&y0<EL_R+M){var ex=elX(clamp(ym,EL_C,EL_R)),eTop=elX(clamp(y0,EL_C,EL_R)),eBot=elX(clamp(y1,EL_C,EL_R));   // Elaine slants, so test the box's worst corner
+      if(x1>eBot-M&&x0<eTop+M){if(xm>ex)x0=Math.max(x0,eTop+M);else x1=Math.min(x1,eBot-M)}}
     var Ms=Math.max(hwW(x0),hwW(x1))+56;
     [corY,rosY].forEach(function(f){var c=f(xm);if(y1>c-Ms&&y0<c+Ms){if(ym>c)y0=Math.max(y0,c+Ms);else y1=Math.min(y1,c-Ms)}});
     x1=Math.min(x1,BL-10);
@@ -2313,8 +2316,6 @@ function leaveDetour(){if(detour){ROUTE=detour.main.R;ROUTE_C=detour.main.C;deto
 function onRaised(){return Math.abs(player.x-RX)<30&&Math.abs(player.y-rosY(RX))<hwW(RX)+2}
 // drivers on Roscoe slow down for the raised crosswalk, and stop for anyone on it
 function raisedHold(v,vt){
-  // on Elaine, drivers stay behind you while you're on the scooter: you're traffic too, and there's no room to pass
-  if(v.elaine&&player.scooter&&v.y<player.y){var gap=player.y-(v.y+v.h/2)-14;if(gap<240&&Math.abs(v.x-player.x)<70)vt=Math.min(vt,Math.max(0,gap-26)*1.4)}
   if(v.mode!=='path'||Math.abs(v.y-rosY(RX))>95||Math.sin(v.rot)>-.5)return vt;
   var front=v.x-v.h/2,dist=front-(RX+34);if(dist<-60||dist>240)return vt;
   vt=Math.min(vt,9*MPH+Math.max(0,dist-50)*1.3);
@@ -2331,7 +2332,7 @@ function spawnElaine(){
   vehicles.push(v);return true;
 }
 // People out walking on the back way, some with dogs. Stop and the dog walkers stop too.
-var bwalkers=[],bwalkT=2,BDOGS=[['Biscuit','#c98b4a','Biscuit loves everybody. Sorry about the drool.'],['Juniper','#ece4d2','Juniper\'s shy, but she likes you.'],['Otis','#2b2b2b','Otis! Gentle. ...Good boy.']];
+var LEAVES=[],bwalkers=[],bwalkT=2,BDOGS=[['Biscuit','#c98b4a','Biscuit loves everybody. Sorry about the drool.'],['Juniper','#ece4d2','Juniper\'s shy, but she likes you.'],['Otis','#2b2b2b','Otis! Gentle. ...Good boy.']];
 function dAt(s){var c=DROUTE_C,r=DROUTE;s=clamp(s,0,c[c.length-1]);for(var i=0;i<r.length-1;i++)if(s<=c[i+1]||i===r.length-2){var L=(c[i+1]-c[i])||1,t=(s-c[i])/L,dx=(r[i+1][0]-r[i][0])/L,dy=(r[i+1][1]-r[i][1])/L;return {x:r[i][0]+dx*L*t,y:r[i][1]+dy*L*t,nx:-dy,ny:dx,ang:Math.atan2(dx,-dy)}}}
 function legOf(s){var ends=[[DROUTE_C[1],DROUTE_C[iCor]],[DROUTE_C[iCor],DROUTE_C[iEl]],[DROUTE_C[iPark],DROUTE_C[iRos-1]]];return ends.filter(function(e){return s>=e[0]-2&&s<=e[1]+2})[0]}
 function updateBackWalkers(dt){
@@ -2398,7 +2399,7 @@ function exitPark(){
   var i=DSTAGES[3].end;player.s=ROUTE_C[i];if(wp<=i){wp=i+1;if(detour&&detour.stage===3){detour.stage=4;chime();updateHUD(0)}}var q=railAt(player.s);player.bx=player.x=q.x;player.y=q.y;explore=null;exTarget=null;cameraTarget=player.y-VH*.56;
 }
 function setupWest(){
-  setupPark();stats.bnamed=0;bwalkers=[];player.scooter=false;player.sx=0;
+  setupPark();stats.bnamed=0;bwalkers=[];player.scooter=false;
   var P=PARK;
   // litter on the back way and in the park
   var C=DROUTE_C;[[1,iCor,.25],[1,iCor,.5],[1,iCor,.8],[iCor,iEl,.2],[iCor,iEl,.45],[iCor,iEl,.7],[iCor,iEl,.9],[iPark,iRos-1,.25],[iPark,iRos-1,.6],[iPark,iRos-1,.85]].forEach(function(l){var q=dAt(C[l[0]]+(C[l[1]]-C[l[0]])*l[2]);litter.push({x:q.x+rnd(-5,5),y:q.y+rnd(-5,5),kind:pick(LITTER_KINDS),a:rnd(0,6.28)})});
@@ -2420,10 +2421,12 @@ function setupWest(){
   var pp={x:elX(3750)+SW2+26,y:3750};NPC.pantry=pp;
   deed({kind:'pantry',label:'Leave a can at the little free pantry',x:pp.x-12,y:pp.y,act:function(){stats.pantry=true;say(player,'Take what you need, leave what you can.',2.4);addPoints(PTS.pantry,pp.x,pp.y)}});
   stats.ball={x:elX(4250)+SW2+4,y:4250,got:false,back:false};
-  // a Divvy scooter at the top of Elaine: ride it down in the street (Chicago doesn't allow them on the sidewalk), then dock it at Roscoe
-  var sy=EL_C+190,sc={x:elX(sy)+SW2-17,y:sy};NPC.scooter=sc;
-  deed({kind:'divvy',label:'Ride the Divvy scooter down Elaine',x:sc.x+12,y:sc.y,r:34,avail:function(){return !!detour&&detour.stage===1&&!player.scooter&&!stats.scooted},
-    act:function(){player.scooter=true;stats.scooted='riding';say(player,'Scooters ride in the street, not on the sidewalk.',2.6)}});
+  // a neighbor lends you a kick scooter for Elaine, to leave at Wendt Park for her daughter
+  var sy=EL_C+190,sc={x:elX(sy)+SW2+19,y:sy,coat:'#b5651d',side:'E'};NPC.scooter=sc;
+  deed({kind:'kick',label:'Borrow the neighbor\'s scooter',x:sc.x-16,y:sc.y,r:34,avail:function(){return !!detour&&detour.stage===1&&!player.scooter&&!stats.scooted},
+    act:function(){player.scooter=true;stats.scooted='riding';say(sc,'Leave it at Wendt Park for my daughter? And slow down around people!',3)}});
+  // leaf piles: jump in them
+  stats.leaves=0;LEAVES=[[1,iCor,.55],[iCor,iEl,.62],[iPark,iRos-1,.45]].map(function(l){var q=dAt(DROUTE_C[l[0]]+(DROUTE_C[l[1]]-DROUTE_C[l[0]])*l[2]);return {x:q.x,y:q.y,t:0}});
   // Roscoe: a kid whose bike chain came off
   var bk={x:PARK.x1+140,y:rosY(PARK.x1+140)+swW(PARK.x1+140)+20,coat:'#d9822b',kid:true,side:'E'};NPC.biker=bk;
   deed({kind:'chain',label:'Help fix the bike chain',x:bk.x,y:bk.y-8,act:function(){stats.chain=true;say(bk,'It works! Thanks!!',2);addPoints(PTS.chain,bk.x,bk.y);bk.fixed=true}});
@@ -2438,7 +2441,10 @@ function updateWest(dt){
   var B=stats.ball;
   if(B&&!B.got&&near(B.x,B.y,15)){B.got=true;say(player,'Somebody\'s ball. Probably from the park.',2.2)}
   if(detour&&!stats.raised&&onRaised()){stats.raised=true;say(player,'Raised crosswalk. Drivers actually slow down here.',2.6);addPoints(PTS.raised,player.x,player.y)}
-  if(player.scooter&&(!detour||detour.stage>1)){player.scooter=false;stats.scooted=true;say(player,'Parked it at the corner, out of everybody\'s way.',2.4);addPoints(PTS.scootPark,player.x,player.y)}
+  // fold the scooter and walk it across Roscoe, then leave it at the park
+  if(player.scooter&&(!detour||detour.stage>1)){player.scooter=false;stats.scooted='folded';say(player,'Fold it up and walk it across.',2.2)}
+  if(stats.scooted==='folded'&&(!detour||detour.stage>3||explore)){stats.scooted=true;say(player,'Left the scooter at the park gate for her.',2.4);addPoints(PTS.scootPark,player.x,player.y)}
+  LEAVES.forEach(function(l){if(l.t>0)l.t+=dt;else if(near(l.x,l.y,20)&&airborne()){l.t=.01;stats.leaves++;addPoints(PTS.leaves,l.x,l.y);crunch();if(stats.leaves===1)say(player,'Crunch!',1.2)}});
   updateBackWalkers(dt);
   if(explore&&explore.kind==='park'){
     PK.hiders.forEach(function(h){if(!h.found&&near(h.x,h.y,30)){h.found=true;PK.found++;say(h,'You found me!',1.8);addPoints(PTS.seek,h.x,h.y);
@@ -2484,7 +2490,10 @@ function drawPark(){
   PK.parents.forEach(function(k){person(k.x,k.y,k.coat,faceSide(k.side),0,PS)});
   if(stats&&stats.ball&&stats.ball.back){ctx.fillStyle='#e8412f';ctx.beginPath();ctx.arc(PK.kids[0].x+10,PK.kids[0].y+8,4,0,Math.PI*2);ctx.fill()}
 }
-function scooterAt(x,y,rot){ctx.save();ctx.translate(x,y);ctx.rotate(rot);ctx.fillStyle='rgba(0,0,0,.22)';ctx.fillRect(-2,-16,8,34);ctx.fillStyle='#1b1d20';rrect(-3.5,-18,7,34,3);ctx.fill();ctx.fillStyle='#3db7e4';rrect(-2.5,-22,5,9,2);ctx.fill();rect(-8,-22,16,2.5,'#1b1d20');ctx.restore()}
+// a kid's kick scooter: deck, two little wheels, handlebar
+function scooterAt(x,y,rot){ctx.save();ctx.translate(x,y);ctx.rotate(rot);ctx.fillStyle='rgba(0,0,0,.22)';ctx.fillRect(-2,-14,7,30);kick();ctx.restore()}
+function kick(){rrect(-3,-14,6,28,3);ctx.fillStyle='#e8412f';ctx.fill();ctx.fillStyle='#222';ctx.beginPath();ctx.arc(0,-15,2.4,0,Math.PI*2);ctx.arc(0,15,2.4,0,Math.PI*2);ctx.fill();rect(-1,-20,2,6,'#9aa0a6');rect(-7,-21,14,2.4,'#2b2b2b')}
+function crunch(){if(!AC||muted)return;var t=AC.currentTime,n=AC.createBufferSource(),f=AC.createBiquadFilter(),g=AC.createGain();n.buffer=noiseBuf;f.type='highpass';f.frequency.value=1800;env(g,t,.005,.25,.3);n.connect(f);f.connect(g);g.connect(master);n.start(t);n.stop(t+.35)}
 function deedDone(kind){return deeds.some(function(d){return d.kind===kind&&d.done})}
 function drawWestThings(){
   var rb=NPC.recycle;if(rb&&vis(rb.y-30,rb.y+30)){ctx.save();ctx.translate(rb.x,rb.y);ctx.rotate(stats.recycle?0:1.3);rrect(-8,-10,16,20,3);ctx.fillStyle='#2f6fa8';ctx.fill();rect(-8,-12,16,4,'#245a8a');ctx.restore()}
@@ -2496,8 +2505,11 @@ function drawWestThings(){
     if(stats.water||Math.sin(worldTime*2)>.3){ctx.fillStyle='rgba(90,170,230,.6)';ctx.beginPath();ctx.arc(le.x-2,le.y-22,3,0,Math.PI*2);ctx.fill()}}
   var pp=NPC.pantry;if(pp&&vis(pp.y-30,pp.y+30)){rect(pp.x-1,pp.y-2,2,10,'#5b4a36');rect(pp.x-9,pp.y-12,18,14,'#c8291f');rect(pp.x-6,pp.y-9,12,8,'#f1e7c9');text('PANTRY',pp.x,pp.y+16,6.5,'#15171a','center',900)}
   var bk=NPC.biker;if(bk&&vis(bk.y-40,bk.y+40)){rider(bk.x+16,bk.y,'#2f86d6',bk.fixed?-Math.PI/2:-1.1,'bike');person(bk.x,bk.y,bk.coat,Math.PI/2,0,PS*.78)}
-  var sc=NPC.scooter;if(sc&&!stats.scooted&&vis(sc.y-30,sc.y+30))scooterAt(sc.x,sc.y,.25);
-  if(stats.scooted===true){var dx=RX+40,dy=rosY(RX)-hwW(RX)-10;if(vis(dy-30,dy+30))scooterAt(dx,dy,Math.PI/2)}
+  var sc=NPC.scooter;if(sc&&vis(sc.y-30,sc.y+30)){person(sc.x,sc.y,sc.coat,-Math.PI/2,0,PS);if(!stats.scooted)scooterAt(sc.x-30,sc.y+4,.25)}
+  if(stats.scooted===true){var g={x:PARK.gx+30,y:PARK.y0+16};if(vis(g.y-30,g.y+30))scooterAt(g.x,g.y,1.3)}
+  LEAVES.forEach(function(l){if(!vis(l.y-50,l.y+50))return;var sp=l.t?Math.min(1,l.t*3):0,a=l.t?Math.max(.35,1-l.t/6):1;
+    for(var i=0;i<26;i++){var an=seeded(i*2.3+l.x)*6.28,rr=seeded(i*5.1+l.y)*(11+sp*26);ctx.fillStyle=['#d9822b','#c8541f','#e8b33a','#9b5a2a'][i%4];ctx.globalAlpha=a;
+      ctx.beginPath();ctx.ellipse(l.x+Math.cos(an)*rr,l.y+Math.sin(an)*rr*.8-(1-sp)*2,3.2,2.2,an,0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1});
   var B=stats&&stats.ball;if(B&&!B.got&&vis(B.y-10,B.y+10)){ctx.fillStyle='#e8412f';ctx.beginPath();ctx.arc(B.x,B.y,4.5,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.beginPath();ctx.arc(B.x,B.y,4.5,-.6,.6);ctx.stroke()}
   drawBackWalkers();
 }
